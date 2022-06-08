@@ -8,3 +8,4 @@ So far I have:
 
 iovsp folder has segy reading and writing modules
 plotvsp folder has trace plotting modules
+procvsp has some basic seismic tool modules
