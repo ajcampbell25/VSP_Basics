@@ -1,3 +1,33 @@
+def tar(VSP, thead, fs, exp):
+    # Apply geometric spreading correction in the form of
+    # T**exp
+    
+    import numpy as np
+    import matplotlib.pyplot as plt
+    
+    print("\u0332".join('\nTAR Parameters :'))
+
+    numsamp = VSP.shape[1]
+    time =  np.arange(0,numsamp*(1000/fs),(1000/fs))    
+
+    gainfunc = time**exp
+    gainfunc = gainfunc.reshape(1,-1)
+    
+    tarred = VSP*gainfunc
+    print (' VSP.shape :', VSP.shape,' gainfunc.shape :', gainfunc.shape)
+    
+    plt.figure(figsize=(15,7))    
+    ax1 = plt.subplot(111)
+    
+    ax1.plot(time, gainfunc.reshape(-1,1), c = 'red')  # using fftfreq to get x axis    
+    ax1.set_title('T**%s Gain Function'%(exp))   
+    ax1.set_xlabel('Time(ms)')    
+    ax1.xaxis.grid()    
+    ax1.yaxis.grid()
+    plt.show()
+    
+    return tarred
+    
 def medfilt (x, k):
     
     """Apply a length-k median filter to a 1D array x.
@@ -195,4 +225,133 @@ def cstack(upvsp, thead, fs, cwin, ctrnum, repeat):
 
     corrstk = np.repeat(corrstk,repeat,axis=1)
 
-    return corrmute, corrstk.T  
+    return corrmute, corrstk.T
+
+def attributes(data, fs):
+    ''' Instantaneous attributes of seismic trace
+    
+    The analytic signal x_a(t) of signal x(t) is:
+
+    where F is the Fourier transform, U the unit step function, 
+    and y the Hilbert transform of x. [1]
+    In other words, the negative half of the frequency spectrum
+    is zeroed out, turning the real-valued signal into a complex signal. 
+    The Hilbert transformed signal can be obtained from 
+    np.imag(hilbert(x)), and the original signal from np.real(hilbert(x)).
+    
+    Use the scipy hilbert transform to get the complex valued analytic 
+    trace. 
+    The magnitude of the analytic signal gives the amplitude envelope.
+    The instantaneous phase corresponds to the phase angle of the 
+    analytic signal.
+    The instantaneous frequency can be obtained by differentiating the 
+    instantaneous phase in respect to time.
+    
+    Data - the VSP traces
+    fs - sampling rate in hertz
+        
+    '''    
+    import numpy as np
+    
+    from scipy.signal import hilbert
+    import matplotlib.pyplot as plt
+    from matplotlib  import gridspec
+    
+    data_nrm = data//np.max(data)
+    
+    # generate a time axis vector    
+    t = np.arange(0,data.shape[1], fs/1000).reshape(-1)
+    tim1, tim2 = t.min(),t.max()
+    
+    analytic_signal = hilbert(data)
+    amp_env = np.abs(analytic_signal)
+    inst_phase = np.rad2deg(np.angle(analytic_signal))
+    inst_phase_unwrap = np.unwrap(np.angle(analytic_signal))
+    inst_frequency = (np.diff(inst_phase_unwrap) / (2.0*np.pi) * fs)
+    
+    print ("\u0332".join('\nAttribute Parameters :'))
+    print (' fs :', fs, '\n',
+           ' max trace amplitude : ', np.max(data),'\n',
+           ' max amplitude envelope : ', np.max(amp_env),'\n' ,
+           ' max inst frequency : ', np.max(inst_frequency),'\n', 
+           ' max inst phase : ', np.max(inst_phase))
+    print (' inst freq shape :', inst_frequency.shape)    
+    print (' inst amp shape :', amp_env.shape)
+    
+    pad_freq = np.pad(inst_frequency, [(0, 0), (0, 1)], mode='constant', constant_values=0) # fix lost sample    
+    
+    mid_row = int((data.shape[0]/3))
+    
+    data_mid = data[mid_row:mid_row+1,].reshape(-1)
+    amp_mid = amp_env[mid_row:mid_row+1,].reshape(-1)
+    freq_mid = pad_freq[mid_row:mid_row+1,].reshape(-1)
+    phase_mid = inst_phase[mid_row:mid_row+1,].reshape(-1)
+    print (' freq_mid shape: ', freq_mid.shape,' amp_mid shape: ', amp_mid.shape)
+    
+    fig = plt.figure(figsize=(14,12))    
+    gs = gridspec.GridSpec(3, 1, height_ratios=[1,1,1], hspace = .25)    
+    ax1 = plt.subplot(gs[0])    
+    ax2 = plt.subplot(gs[1])
+    ax3 = plt.subplot(gs[2])
+
+    ax1.plot(t,data_mid)
+    ax1.plot(t,amp_mid,'k', linewidth=1)
+    ax1.plot(t,-amp_mid,'k', linewidth=1)
+    ax1.set_xlim(tim1,tim2)
+    ax1.set_xlabel('Time(ms)')    
+    ax1.set_title("raw amplitude and envelope for trace %s of %s"%(mid_row,data.shape[0]))
+    ax1.grid('on')
+    ax1.legend(labels=['seismic','envelope'])
+
+    ax2.plot(t,phase_mid,'k', linewidth=1)
+    ax2.set_xlim(tim1,tim2)
+    ax2.set_xlabel('Time(ms)')
+    ax2.set_title("unwrapped instantaneous phase for trace %sof %s"%(mid_row,data.shape[0]))    
+    ax2.grid('on')
+
+    ax3.plot(t,freq_mid,'k', linewidth=1)
+    ax3.set_xlim(tim1,tim2)
+    ax3.set_xlabel('Time(ms)')
+    ax3.set_title("instantaneous frequency for trace %s of %s"%(mid_row,data.shape[0]))
+    ax3.grid('on')
+
+    ''' A test section based on 
+    https://curvenote.com/@stevejpurves/geoscience/phaseandhilbert
+    
+    '''
+    '''
+    hilbert_trace = np.zeros_like(data)
+    hilbert_trace = np.imag(hilbert(data))
+
+    z = data + 1j*hilbert_trace
+    env = np.abs(z)
+    phase2 = np.angle(z)
+    
+    data_mid = data[mid_row:mid_row+1,].reshape(-1)
+    hil_tr_mid = hilbert_trace[mid_row:mid_row+1,].reshape(-1)
+    env_mid = env[mid_row:mid_row+1,].reshape(-1)
+    phase2_mid = phase2[mid_row:mid_row+1,].reshape(-1)
+    print (' hil_tr_mid shape: ', hil_tr_mid.shape)
+
+    plt.subplot(5,1,4)
+    plt.plot(t,data_mid)
+    plt.plot(t, hil_tr_mid, ':')
+    plt.plot(t, env_mid, 'k', linewidth=1)
+    plt.plot(t, -env_mid, 'k', linewidth=1)
+    plt.title('Trace Amplitudes')
+    plt.grid('on')
+    plt.xlim(tim1,tim2)
+    plt.legend(labels=['seismic','hilbert','envelope'])
+
+    plt.subplot(5,1,5)
+    plt.plot(t,phase2_mid, 'k', linewidth=1)
+    plt.title('Instantaneous Phase')
+    plt.grid('on')
+    plt.xlim(tim1,tim2)
+    plt.xlabel('Time (ms)' )
+    
+    plt.tight_layout()
+    plt.show()
+    '''
+ 
+    return amp_env, pad_freq, inst_phase    
