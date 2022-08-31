@@ -70,9 +70,12 @@ def wiggle_plot(thead, VSPdata, **kwargs):
     
     # apply a trace normalization to main plot also a scale factor         
     if (norm == 'Y') or (norm =='y'):        
-        row_sums = np.linalg.norm(data1, axis=1)        
-        data2 = (data1 / row_sums[:, np.newaxis]) # problem for traces of all 0s        
-        datascaled = data2 * scal
+         #row_sums = np.linalg.norm(VSPdata, axis=1)
+        #data2 = (VSPdata / row_sums[:, np.newaxis]) # problem for traces of all zeros,ie. after median and subtraction
+        #datascaled = data2
+        amax = np.nanmax(np.abs(VSPdata), axis=1) 
+        data2 = (VSPdata / amax[:, np.newaxis])        
+        datascaled = data2 * scal        
         
     else:        
         datascaled = data1 * scal
@@ -90,7 +93,11 @@ def wiggle_plot(thead, VSPdata, **kwargs):
     else:    
         dscaler, pad = (trace_num, 1)        
         dlabel = 'Receiver Number'
-                  
+    
+    # for labeling trace number on top of main track
+    dscaler_tracenum, pad = (trace_num, 1)        
+    dlabel_tracenum = 'Receiver Number'                  
+
     fig = plt.figure(figsize=(15,12))    
     gs = gridspec.GridSpec(2, 1, height_ratios=[0.2, 2], hspace = .05)
     
@@ -109,7 +116,8 @@ def wiggle_plot(thead, VSPdata, **kwargs):
         ax2.set_xlim(dscaler[0]-pad, dscaler[-1]+pad )
         ax2.set_ylim(Tmax, Tmin)
         ax2.set_xticks(dscaler[:-1:1])        
-        ax2.set_xlabel(dlabel)   
+        ax2.set_xlabel(dlabel)
+        
     ax2.plot(dscaler,TT[0:],c='red',linewidth=2, label='Travel Time' )    
     for n, label in enumerate(ax2.xaxis.get_ticklabels()):
         label.set_rotation(90)
@@ -125,8 +133,8 @@ def wiggle_plot(thead, VSPdata, **kwargs):
         print (' Number of traces in plot :', VSPdata.shape[0], 
            ' Number of samples per trace :', VSPdata.shape[1])
         print(' VSPdata type :', VSPdata.dtype)
-        print (' datascaled shape [0]',datascaled.shape[0], 
-           ' datascaled shape [1]',datascaled.shape[1])    
+        print (' sample rate (hz)',fs, 
+           ' min max plot time',np.min(y), np.max(y))    
         print (' thead shape :', thead.shape)
         print (' Min TVDSRD - pad', np.min(TVDSRD)-pad, ' Pad :', pad)    
         print (' Max TVDSRD + pad', np.max(TVDSRD)+pad, ' Pad :', pad)    
@@ -205,9 +213,12 @@ def composite_plot(thead, VSPdata, Cstack, **kwargs):
  
     # apply a trace normalization to main plot also a scale factor
     if (norm == 'Y') or (norm =='y'):        
-        row_sums = np.linalg.norm(data1, axis=1)        
-        data2 = (data1 / row_sums[:, np.newaxis]) # problem for traces of all 0s        
-        datascaled = data2 * scal
+         #row_sums = np.linalg.norm(VSPdata, axis=1)
+        #data2 = (VSPdata / row_sums[:, np.newaxis]) # problem for traces of all zeros,ie. after median and subtraction
+        #datascaled = data2
+        amax = np.nanmax(np.abs(VSPdata), axis=1) 
+        data2 = (VSPdata / amax[:, np.newaxis])        
+        datascaled = data2 * scal        
         
     else:        
         datascaled = data1 * scal
@@ -339,8 +350,6 @@ def plotsingletrace( VSP1, Tmin, Tmax, thead, spacing, scal1, title):
     
     plt.show()
         
-#def four_plots(VSP1, VSP2, VSP3, VSP4,fs, thead, scale, trange, drange, txt1, 
-#               txt2, txt3, txt4, png_txt,info_gray4,save):
 def four_plots(VSP1, VSP2, VSP3, VSP4,fs, thead, **kwargs):    
     import numpy as np
     import matplotlib.pyplot as plt
@@ -510,9 +519,12 @@ def plotcolor(thead, VSPdata,**kwargs):
     print('VSPdata shape:', VSPdata.shape, 'tindex shape :', tindex.shape,'rindex shape :', rindex.shape, )
 
     if (norm == 'Y') or (norm =='y'):
-        row_sums = np.linalg.norm(VSPdata, axis=1)
-        data2 = (VSPdata / row_sums[:, np.newaxis]) # problem for traces of all zeros,ie. after median and subtraction
-        datascaled = data2 
+        #row_sums = np.linalg.norm(VSPdata, axis=1)
+        #data2 = (VSPdata / row_sums[:, np.newaxis]) # problem for traces of all zeros,ie. after median and subtraction
+        #datascaled = data2
+        amax = np.nanmax(np.abs(VSPdata), axis=1) 
+        data2 = (VSPdata / amax[:, np.newaxis])        
+        datascaled = data2 * scal        
     else:
         datascaled = VSPdata 
         
