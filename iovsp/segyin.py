@@ -167,6 +167,16 @@ def readsegyio3(inputfile, file_headers,DF_ASL, SrcElev, SRD_ASL, PTS):
            
             print ('\n',txt_hed)
                 
+    ############## check if times are in expected header  ######################
+    # if nothing bytes 197-200 load times from lag time B
+    if np.sum(ttime)==0:
+        ttime=ttime_ms
+
+    ############## check if trace number exists  ######################
+    # if nothing bytes 197-200 load times from lag time B
+    if np.sum(trnum)==0:
+        trnum=np.arange(1,data.shape[0]+1,1 )
+
     ############## shift elevations to reference datum ######################
     
     SrcZ = (sdpth *0) + SrcElev # careful, comment out if field is correct
@@ -219,8 +229,10 @@ def readsegyio3(inputfile, file_headers,DF_ASL, SrcElev, SRD_ASL, PTS):
            'samprate microseconds : ', samprate, \
            '\n numsamp from headers : ', numsamp)    
     print (' first time header value : ',ttime[0:1], \
-           '\n first auxilliary time header value :', auxtime_ms[0:1])    
+           '\n first lag time A value :', auxtime_ms[0:1],
+           '\n first lag time B value :', ttime_ms[0:1])
     print (' source depth from header trace 1 :', sdpth[0:1])
+
 
     
     return data, numsamp, samprate, samprate_hz, thead.T
@@ -331,7 +343,8 @@ def readsegy(inputfile, file_headers,DF_ASL, SrcElev, SRD_ASL, PTS):
            '\n numsamp from headers : ', numsamp)
     
     print (' first time header value : ',ttime[0:1], \
-           '\n first auxilliary time header value :', auxtime_ms[0:1])
+           '\n first lag time A  time header value :', auxtime_ms[0:1],
+           '\n first lag time B  time header value :', ttime_ms[0:1])
     
     print (' source depth from header trace 1 :', sdpth[0:1])
     
