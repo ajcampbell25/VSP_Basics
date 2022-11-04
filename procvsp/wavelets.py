@@ -18,6 +18,9 @@ def ormsby(duration, dt, f):
     import matplotlib.pyplot as plt
 
     f = np.asanyarray(f).reshape(-1, 1)
+    
+    print ('\nOrmsby Info')
+    print (' duration :',duration,' dt :',dt, ' f :',f)
 
     try:
         f1, f2, f3, f4 = f
@@ -79,6 +82,9 @@ def ricker(duration, dt, f):
     """
     import numpy as np
     import matplotlib.pyplot as plt
+    
+    print ('\nRicker Info')
+    print (' duration :',duration,' dt :',dt, ' f :',f)
     f = np.asanyarray(f).reshape(-1, 1)
     t = np.arange(-duration/2, duration/2, dt)
     pft2 = (np.pi * f * t)**2

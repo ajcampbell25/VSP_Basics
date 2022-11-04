@@ -346,7 +346,7 @@ def bandpass_filter(data, lowcut, highcut, fs, order, N, QCP):
 
     return buttfilt
 
-def simple_bpf(VSPdata, f1, f2, transL,transH, fs ):
+def simple_bpf_old(VSPdata, f1, f2, transL,transH, fs ):
     
     '''from excellent tutorial at:
     https://tomroelandts.com/articles/how-to-create-simple-band-pass-and-band-reject-filters
@@ -363,7 +363,6 @@ def simple_bpf(VSPdata, f1, f2, transL,transH, fs ):
     from matplotlib  import gridspec
     
     print("\u0332".join('\nSimple BPF Information :'))
-#    plt.rcParams.update({'font.size': 12})
     
     L=1024 # length of frequency response
     samprate = 1/fs            #sample rate in seconds
@@ -447,6 +446,154 @@ def simple_bpf(VSPdata, f1, f2, transL,transH, fs ):
     plt.show()
 
     return BPFdata
+
+def simple_bpf(VSPdata, tf1,tf2,tf3,tf4, fs, qc ):
+#def simple_bpf(VSPdata, f1, f2, transL, transH, fs, qc ):
     
+    '''from excellent tutorial at:
+    https://tomroelandts.com/articles/how-to-create-simple-band-pass-and-band-reject-filters
+    
+    1. Create low pass and high pass windowed sync filters   
+    2. Convolve the 2 filters to get a band pass filter
+    3. Convolve the data trace with band pass filter. Numpy has an easy sinc generator
+    
+    Original method uses transtion zones:
+    - transL is the transition band or the low pass filter - the high frequency roll-off
+    - transH is the transition band or the high pass filter - the low frequency roll-off
+    To call original method:
+    decon_dwn_filt[:,k] = simple_bpf(decon_dwn_all[:,k], lc1, hc1,tz1,tz2,fs,qc='y')
+    
+    Updated method uses corner frequencies, from which the transition zones are calculated
+    tf1 - low cut-off corner in Hertz
+    tf2 - low pass corner in Hertz
+    tf3 - low pass end corner in Hertz
+    tf4 - high cut-off corner in Hertz
+    
+
+    '''
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from matplotlib  import gridspec
+    
+    VSPdata=VSPdata.T
+    
+#    print("\u0332".join('\nSimple BPF Information :'))
+    
+    L=1024 # length of frequency response
+    samprate = 1/fs            #sample rate in seconds
+    
+    dt = 1/fs
+    '''  
+    # This is the original method from T.Roelandts 
+    # I adapted it to use corner frequencies instead of transition zones
+    
+    fL = f1/fs  # Cutoff frequency as a fraction of the sampling rate 
+    fH = f2/fs  # Cutoff frequency as a fraction of the sampling rate 
+    bL = transL/fs  # Transition band, as a fraction of the sampling rate 
+    bH = transH/fs  # Transition band, as a fraction of the sampling rate 
+    NL = int(np.ceil((4 / bH))) # samples in low pass
+    NH = int(np.ceil((4 / bL))) # samples in high pass
+    print (' fL :', fL,' fH :', fH)    
+    print (' NL :', NL,' NH :', NH)
+    ''' 
+    # This is the adapted method using corner frequencies instead 
+    # of transition zones
+    
+    fL=(((tf2-tf1)/2)+tf1)/fs
+    fH=(((tf4-tf3)/2)+tf3)/fs
+    bL = (tf2-tf1)/fs
+    bH = (tf4-tf3)/fs
+    NL=int(np.ceil((4/bH)))
+    NH=int(np.ceil((4/bL)))    
+    #print (' testfL :', testfL,' testfH :', testfH)      
+    #print (' testNL :', testNL,' testNH :', testNH)
+    
+    if not NL % 2: NL += 1  # Make sure that NL is odd.
+    nL = np.arange(NL)
+    if not NH % 2: NH += 1  # Make sure that NH is odd.
+    nH = np.arange(NH)
+ 
+    # Compute a low-pass filter with cutoff frequency fH.
+    hlpf = np.sinc(2 * fH * (nL - (NL - 1) / 2))
+    hlpf *= np.blackman(NL)
+    hlpf = hlpf / np.sum(hlpf)
+ 
+    # Compute a high-pass filter with cutoff frequency fL.
+    hhpf = np.sinc(2 * fL * (nH - (NH - 1) / 2))
+    hhpf *= np.blackman(NH)
+    hhpf = hhpf / np.sum(hhpf)
+    hhpf = -hhpf
+    hhpf[(NH - 1) // 2] += 1
+    
+    # Convolve both filters.    
+    h = np.convolve(hlpf, hhpf)
+
+    # Pad filter with zeros.
+    h_padded = np.zeros(L)
+    h_padded[0:h.shape[0]] = h
+    
+    # do the fft
+    H = np.abs(np.fft.fft(h_padded))
+    freq = np.fft.fftfreq(H.shape[0], d=dt)    # Generate plot frequency axis
+    #########
+    keep = freq>=0    
+    H = H[keep]    
+    freq = freq[keep]
+    
+    # Test if VSP data is a single trace - number of dimensions after squeeze
+    # should be 1
+    VSPdata=np.squeeze(VSPdata)
+    numdims=VSPdata.ndim
+    
+    if numdims == 1:
+        BPFdata = np.zeros(shape = (VSPdata.shape), dtype=np.float32)
+        BPFdata = np.convolve(VSPdata,h, mode='same')
+    else:  
+        # apply filter to data
+        BPFdata = np.zeros(shape = (VSPdata.shape[0], VSPdata.shape[1]), dtype=np.float32)          
+        for k in range(0,(VSPdata.shape[0])):        
+            BPFdata[k,:-1] = np.convolve(VSPdata[k,:-1],h, mode='same')
+        
+#    print (' BPFdata.shape :',BPFdata.shape)
+    if (qc=='y')or(qc=='Y'):
+    # Plot frequency response (in amplitude and dB) and impulse response
+        fig = plt.figure(figsize=(15,5))    
+        gs = gridspec.GridSpec(1, 3, width_ratios=[1,1,1], wspace = .25)
+    
+        ax1 = plt.subplot(gs[0])    
+        ax1.plot(freq,H)      
+        ax1.set_xlim(0, tf4*2)       # subjective choice, f2 for original method
+        ax1.set_xlabel('Frequency (Hz)')    
+        ax1.set_ylabel('Gain')    
+        ax1.grid(True)    
+#        ax1.legend(loc='best',borderaxespad=0, fontsize = 8)        
+#        ax1.set_title('Simple Bandpass Frequency Response\n%s hz to %s hz passband \n%s hz low taper , %s hz high taper'%(f1, f2, transL, transH),fontsize=12)
+        ax1.set_title('Simple Bandpass Frequency Response\n%s/%s - %s/%s hz corner frequencies'
+                      %(tf1, tf2, tf3, tf4),fontsize=12)
+
+        ax2 = plt.subplot(gs[1])    
+        ax2.plot(freq, 20 * np.log10(H))      
+        ax2.set_xlim(0, tf4*4)      # subjective choice, f2 for original method
+        ax2.set_ylim(-200,0)       # subjective choice
+        ax2.set_xlabel('Frequency (Hz)')    
+        ax2.set_ylabel('Gain [dB]')    
+        ax2.grid(True)    
+#         ax2.legend(loc='best',borderaxespad=0, fontsize = 8)        
+#        ax2.set_title('Simple Bandpass Frequency Response\n%s hz to %s hz passband \n%s hz low taper , %s hz high taper'%(f1, f2, transL, transH),fontsize=12)    
+        ax2.set_title('Simple Bandpass Frequency Response\n%s/%s - %s/%s hz corner frequencies'
+                      %(tf1, tf2, tf3, tf4),fontsize=12)    
+    
+        ax3 = plt.subplot(gs[2])    
+        x = np.arange((-h.shape[0]*dt)/2, (h.shape[0]*dt)/2, dt)
+        ax3.plot(x,h, c='red')                                              
+#        ax3.set_title('Simple Bandpass Impulse Response\n%s hz to %s hz passband \n%s hz low taper , %s hz high taper'%(f1, f2, transL, transH),fontsize=12)    
+        ax3.set_title('Simple Bandpass Impulse Response\n%s/%s - %s/%s hz corner frequencies'
+                      %(tf1, tf2, tf3, tf4),fontsize=12)    
+        ax3.set_xlabel('Time (s)')        
+#        ax3.legend(loc='upper right',borderaxespad=0, fontsize = 8)        
+        ax3.grid(True)        
+        plt.show()
+
+    return BPFdata.T    
     
     

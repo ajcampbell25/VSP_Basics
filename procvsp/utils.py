@@ -81,7 +81,7 @@ def shift(arr, tracehead, align, atime, fs):
     pad_align = atime      # shallow traces can be cut of if atime > xshift    
     pad_twt = arr.shape[1]-int(np.max(xshift))
                                
-    if align == 'up':        
+    if align == 'up':           # align upgoing (TWT)        
         xshift = xshift.astype(int)        
         arr = np.pad(arr, ((0,0),(0, pad_twt)), 'constant')
         print (' pad twt : ', pad_twt, ' arr shape :', arr.shape)        
@@ -89,17 +89,17 @@ def shift(arr, tracehead, align, atime, fs):
         arr2 = np.zeros(shape = (arr.shape[0], arr.shape[1]),dtype=np.float32)        
         print (' second arr2 shape :', arr2.shape)
                
-    elif align == 'down':        
+    elif align == 'down':      # align downgoing(flatten)      
         xshift = xshift - atime        
         xshift = xshift.astype(int) * -1        
         arr = np.pad(arr, ((0,0),(0, pad_align)), 'constant')        
         arr2 = np.zeros(shape = (arr.shape[0], arr.shape[1]),dtype=np.float32)
         
-    elif align == 'unalign':        
+    elif align == 'unalign':  # remove downgoing alignment (back to OWT)       
         xshift = xshift.astype(int) - atime 
 
     for i, trace in enumerate(arr[::1, :]):        
-        arr2[i,] = np.roll(arr[i,],xshift[i]) # carefulwith input array shape
+        arr2[i,] = np.roll(arr[i,],xshift[i]) # careful with input array shape
         
         if xshift[i] > 0:            
             arr2[i,:xshift[i]] = 0            # [1, 4000] need row number 0            
