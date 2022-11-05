@@ -96,7 +96,7 @@ def wiggle_plot(thead, VSPdata, **kwargs):
     
     # for labeling trace number on top of main track
     dscaler_tracenum, pad = (trace_num, 1)        
-    dlabel_tracenum = 'Receiver Number'                  
+    dlabel_tracenum = 'Receiver Number'
 
     fig = plt.figure(figsize=(15,12))    
     gs = gridspec.GridSpec(2, 1, height_ratios=[0.2, 2], hspace = .05)
@@ -109,9 +109,11 @@ def wiggle_plot(thead, VSPdata, **kwargs):
     ax1.set_xlim(np.min(TVDSRD)-pad, np.max(TVDSRD) + pad )    
     ax1.set_title('Interval Velocity and %s'%(title_top),fontsize=14)            
     for i, trace in enumerate(datascaled[::1, :]):
+
         #add sample values to either receiver number or trace number     
         x = trace + dscaler[i]    
-        ax2.plot(x, y, 'k-', linewidth = .5)
+#        ax2.plot(x, y, 'k-',  linewidth = .5)
+        ax2.plot(x, y, 'k-',  linewidth = .5)
         ax2.fill_betweenx(y, dscaler[i], x, where=(x > dscaler[i]), color='k')
         ax2.set_xlim(dscaler[0]-pad, dscaler[-1]+pad )
         ax2.set_ylim(Tmax, Tmin)
@@ -130,12 +132,11 @@ def wiggle_plot(thead, VSPdata, **kwargs):
 
     if(info_wig=='y')or(info_wig=='Y'):    
         print("\u0332".join('\nWiggle Plot Global Information :')) 
-        print (' Number of traces in plot :', VSPdata.shape[0], 
-           ' Number of samples per trace :', VSPdata.shape[1])
+        print (' VSPdata.shape :', VSPdata.shape,' (traces,samples)')
         print(' VSPdata type :', VSPdata.dtype)
-        print (' sample rate (hz)',fs, 
-           ' min max plot time',np.min(y), np.max(y))    
-        print (' thead shape :', thead.shape)
+        print (' Max an Min Amplitude VSPdata :',np.nanmax(VSPdata),np.nanmin(VSPdata))
+        print (' datascaled.shape ',datascaled.shape,' (traces,samples)')    
+        print (' thead shape :', thead.shape,' (traces,header columns)')
         print (' Min TVDSRD - pad', np.min(TVDSRD)-pad, ' Pad :', pad)    
         print (' Max TVDSRD + pad', np.max(TVDSRD)+pad, ' Pad :', pad)    
         print (' min max intvel :', np.min(intVel), np.max(intVel))
@@ -166,7 +167,24 @@ def composite_plot(thead, VSPdata, Cstack, **kwargs):
     plot_polarity = 'n'     # n for normal or tape polarity, r to flip polarity 
     scal = scale plot amplitudes by this value
     info_wig = print diagnostic information to terminal
+    timframe = set the time header to 0 if data is aligned, or chose the TWT header,
+               defaults to OWT
     Title_plot = 'plot title '
+    
+    Example Usage:
+    
+    plot_params = {"pol":'n', 
+                    "Tmax":3500, "Tmin":0, 
+                    "first_rcv":first_rcv, 
+                    "spacing":'z', 
+                    "skiplabel":4, 
+                    "fs":fs, 
+                    "norm":'n',
+                    "scal":1000, 
+                    "title_top":'Corridor Mute ',
+                    "info_wig":'y',
+                    "timframe":'twt'} 
+    composite_plot(thead_dec_edit,corr_in,corr_stk, **plot_params)
 
     """
       
@@ -183,7 +201,7 @@ def composite_plot(thead, VSPdata, Cstack, **kwargs):
     skiplabel = kwargs['skiplabel']
     fs = kwargs['fs']
     norm = kwargs['norm']
-    scal = kwargs['scal']
+    scalv = kwargs['scal']
     title_top = kwargs['title_top']
     info_wig = kwargs['info_wig']
     tframe = kwargs['timframe']
@@ -218,10 +236,10 @@ def composite_plot(thead, VSPdata, Cstack, **kwargs):
         #datascaled = data2
         amax = np.nanmax(np.abs(VSPdata), axis=1) 
         data2 = (VSPdata / amax[:, np.newaxis])        
-        datascaled = data2 * scal        
+        datascaled = data2 * scalv        
         
     else:        
-        datascaled = data1 * scal
+        datascaled = data1 * scalv
        
     # flip polarity if requested
     if (pol == 'r') or (pol =='R'):        
@@ -244,8 +262,8 @@ def composite_plot(thead, VSPdata, Cstack, **kwargs):
 
     # scale the corridor stack to somewhat similar amplitude range as input to cstack
     # ie. each trace amplitude is added to trace number    
-    datascaled_cstk = Cstack * abs(scal/((trace_num.max()+pad)/(trace_num_cstk.max()-padc*2)))
-    print (' pol :',pol, ' comp scalar :', scal/((trace_num.max()+pad)/(trace_num_cstk.max()-padc*2)) )
+    datascaled_cstk = Cstack * abs(scalv/((trace_num.max()+pad)/(trace_num_cstk.max()-padc*2)))
+    print (' pol :',pol, ' comp scalar :', scalv/((trace_num.max()+pad)/(trace_num_cstk.max()-padc*2)) )
     
     fig = plt.figure(figsize=(17,12))
 
@@ -289,12 +307,12 @@ def composite_plot(thead, VSPdata, Cstack, **kwargs):
 
     if(info_wig=='y')or(info_wig=='Y'):    
         print("\u0332".join('\nWiggle Plot Global Information :')) 
-        print (' Number of traces in plot :', VSPdata.shape[0], 
-           ' Number of samples per trace :', VSPdata.shape[1])
+        print (' VSPdata.shape :', VSPdata.shape,' (traces,samples)')
         print(' VSPdata type :', VSPdata.dtype)
-        print (' datascaled shape [0]',datascaled.shape[0], 
-           ' datascaled shape [1]',datascaled.shape[1])    
-        print (' thead shape :', thead.shape)
+        print (' Max an Min Amplitude VSPdata :',np.nanmax(VSPdata),np.nanmin(VSPdata))
+        print (' Max an Min Amplitude Cstack :',np.nanmax(Cstack),np.nanmin(Cstack))
+        print (' datascaled.shape ',datascaled.shape,' (traces,samples)')    
+        print (' thead shape :', thead.shape,' (traces,header columns)')
         print (' Min TVDSRD - pad', np.min(TVDSRD)-pad, ' Pad :', pad)    
         print (' Max TVDSRD + pad', np.max(TVDSRD)+pad, ' Pad :', pad)    
         print (' min max intvel :', np.min(intVel), np.max(intVel))
@@ -362,10 +380,10 @@ def four_plots(VSP1, VSP2, VSP3, VSP4,fs, thead, **kwargs):
     txt4 = kwargs['ss_title4']
     save = kwargs['savePNG']  
     png_txt = kwargs['png_name']       
-    scale = kwargs['scalar']              # scaling to plot 1,2,3,4 amplitudes    
+    scale = kwargs['scal']              # scaling to plot 1,2,3,4 amplitudes    
     trange = kwargs['time_range']   
     drange = kwargs['depth_range']
-    info_gray4 = kwargs['info_gray4']
+    info_gray4 = kwargs['info_plot']
     
     rcvdepth = thead[:, 2]
     numsamp = VSP1.shape[1]
@@ -375,10 +393,7 @@ def four_plots(VSP1, VSP2, VSP3, VSP4,fs, thead, **kwargs):
     ################ create plot tick labeling and indexing ##############
     
     tindex1 = np.arange(0, numsamp*(1000/fs),(1000/fs) )  # convert fs to msec.
-    tindex2 = np.arange(0, VSP2.shape[1]*(1000/fs),(1000/fs))
-    tindex3 = np.arange(0, VSP3.shape[1]*(1000/fs),(1000/fs))  
-    tindex4 = np.arange(0, VSP4.shape[1]*(1000/fs),(1000/fs))
-    
+
     rindex  = np.stack([rcvdepth for _ in range(VSP1.shape[0])], axis=1)
     
     ############### make plots of input and SVD filtered output ################
@@ -394,8 +409,8 @@ def four_plots(VSP1, VSP2, VSP3, VSP4,fs, thead, **kwargs):
     ax3 = fig.add_subplot(gs1[0:1, 12:18])
     ax4 = fig.add_subplot(gs1[0:1, 18:24])
 
-    ax1.imshow(VSP1.T, cmap=cmap, interpolation='none', 
-               vmin = -VSP1.max()/scale[0],vmax = VSP1.max()/scale[0],
+    ax1.imshow(VSP1[:,:numsamp-1].T, cmap=cmap, interpolation='none', 
+               vmin = -np.nanmax(VSP1)/scale[0],vmax = np.nanmax(VSP1)/scale[0],
                extent = [rindex.min(), rindex.max(), tindex1.max(), 
                 tindex1.min()], aspect = 'auto')
 
@@ -405,10 +420,10 @@ def four_plots(VSP1, VSP2, VSP3, VSP4,fs, thead, **kwargs):
     ax1.set_xlabel('Receiver Depth')    
     ax1.set_title('%s'%(txt1))
 
-    ax2.imshow(VSP2.T, cmap=cmap, interpolation='none',
-               vmin = -VSP2.max()/scale[1],vmax = VSP2.max()/scale[1],
-               extent = [rindex.min(), rindex.max(), tindex2.max(), 
-                tindex2.min()], aspect = 'auto')    
+    ax2.imshow(VSP2[:,:numsamp-1].T, cmap=cmap, interpolation='none',
+               vmin = -np.nanmax(VSP2)/scale[1],vmax = np.nanmax(VSP2)/scale[1],
+               extent = [rindex.min(), rindex.max(), tindex1.max(), 
+                tindex1.min()], aspect = 'auto')    
     ax2.yaxis.grid(c = 'black', lw = .1)    
     ax2.set_ylim(trange[1], trange[0]) # extents must be set    
     ax2.set_xlim(drange[0], drange[1])    
@@ -416,10 +431,10 @@ def four_plots(VSP1, VSP2, VSP3, VSP4,fs, thead, **kwargs):
     ax2.set_title('%s '%(txt2))    
     ax2.set_yticklabels([])
  
-    ax3.imshow(VSP3.T, cmap=cmap, interpolation='none',
-               vmin = -VSP3.max()/scale[2],vmax = VSP3.max()/scale[2],
-               extent = [rindex.min(), rindex.max(), tindex3.max(), 
-               tindex3.min()], aspect = 'auto')
+    ax3.imshow(VSP3[:,:numsamp-1].T, cmap=cmap, interpolation='none',
+               vmin = -np.nanmax(VSP3)/scale[2],vmax = np.nanmax(VSP3)/scale[2],
+               extent = [rindex.min(), rindex.max(), tindex1.max(), 
+               tindex1.min()], aspect = 'auto')
     
     ax3.yaxis.grid(c = 'black', lw = .1)    
     ax3.set_ylim(trange[1], trange[0]) # extents must be set    
@@ -428,10 +443,11 @@ def four_plots(VSP1, VSP2, VSP3, VSP4,fs, thead, **kwargs):
     ax3.set_title('%s '%(txt3))    
     ax3.set_yticklabels([])  
  
-    ax4.imshow(VSP4.T, cmap=cmap, interpolation='none',
-               vmin = -VSP4.max()/scale[3],vmax = VSP4.max()/scale[3],
-               extent = [rindex.min(), rindex.max(), tindex4.max(), 
-               tindex4.min()], aspect = 'auto')    
+    ax4.imshow(VSP4[:,:numsamp-1].T, cmap=cmap, interpolation='none',
+               vmin = -np.nanmax(VSP4)/scale[3],vmax = np.nanmax(VSP4)/scale[3],
+               extent = [rindex.min(), rindex.max(), tindex1.max(), 
+               tindex1.min()], aspect = 'auto')
+
     ax4.yaxis.grid(c = 'black', lw = .1)    
     ax4.set_ylim(trange[1], trange[0]) # extents must be set    
     ax4.set_xlim(drange[0], drange[1])    
@@ -448,14 +464,163 @@ def four_plots(VSP1, VSP2, VSP3, VSP4,fs, thead, **kwargs):
     plt.show()
     
     if(info_gray4=='y')or(info_gray4=='Y'):        
-        print("\u0332".join('\nFour Box Global Information :'))
+        print("\u0332".join('\nColor Multi Plot Global Information :'))
         print (' Number of traces in plot :', VSP1.shape[0], 
            ' Number of samples per trace :', ' tindex1 shape :,',tindex1.shape,
-           ' tindex1 min max :', tindex1.min(),tindex1.max(),            
-           ' tindex2 min max :', tindex2.min(),tindex1.max(), 
-           ' tindex3 min max :', tindex3.min(),tindex1.max(), 
-           ' tindex4 min max :', tindex4.min(),tindex1.max())
+           ' tindex1 min max :', tindex1.min(),tindex1.max(),)            
  
+        print (' Max an Min Amplitude Box 1. :',np.nanmax(VSP1),np.nanmin(VSP1))
+        print (' Max an Min Amplitude Box 2 :',np.nanmax(VSP2),np.nanmin(VSP2))
+        print (' Max an Min Amplitude Box 3 :',np.nanmax(VSP3),np.nanmin(VSP3))
+        print (' Max an Min Amplitude Box 4 :',np.nanmax(VSP4),np.nanmin(VSP4))
+        
+def decon_plots(VSP1, VSP2, VSP3, VSP4, VSP5,VSP6,fs, thead, **kwargs):    
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from matplotlib  import gridspec
+
+  
+    txt1 = kwargs['ss_title1']
+    txt2 = kwargs['ss_title2']    
+    txt3 = kwargs['ss_title3']
+    txt4 = kwargs['ss_title4']
+    txt5 = kwargs['ss_title5']
+    txt6 = kwargs['ss_title6']
+
+    save = kwargs['savePNG']  
+    png_txt = kwargs['png_name']       
+    scale = kwargs['scal']              # scaling to plot 1,2,3,4 amplitudes    
+    trange = kwargs['time_range']   
+    drange = kwargs['depth_range']
+    info_gray4 = kwargs['info_plot']
+    
+    rcvdepth = thead[:, 2]
+    
+    # Set the number of samples to that of the aligned downgoing
+    # This avoids creating a time index for every track as the TWT data 
+    # sets are longer than necessary due to aligning/unaligning process
+    # This requires all data sets to have the same number of samples
+    numsamp = VSP1.shape[1]
+    
+    # Choose a red-blue color map for the seismic plots
+    cmap = 'seismic'
+    
+    ################ create plot tick labeling and indexing ##############
+    
+    tindex1 = np.arange(0, numsamp*(1000/fs),(1000/fs) )  # convert fs to msec.    
+    rindex  = np.stack([rcvdepth for _ in range(VSP1.shape[0])], axis=1)
+    
+    ############### make plots of input and SVD filtered output ################
+    
+    fig = plt.figure(figsize=(16,6) )    
+#    fig.subplots_adjust(wspace=0.125, hspace=0.5)
+
+    from matplotlib.gridspec import GridSpec
+    
+    gs1 = GridSpec(1, 32, hspace = .25, wspace=0.55) # make a row by col grid
+    ax1 = fig.add_subplot(gs1[0:1, 0:6])            # combine rows or columns
+    ax2 = fig.add_subplot(gs1[0:1, 6:12])
+    ax3 = fig.add_subplot(gs1[0:1, 12:18])
+    ax4 = fig.add_subplot(gs1[0:1, 18:24])
+    ax5 = fig.add_subplot(gs1[0:1, 24:30])
+    ax6 = fig.add_subplot(gs1[0:1, 31:32])
+
+    ax1.imshow(VSP1[:,:numsamp-1].T, cmap=cmap, interpolation='none', 
+               vmin = -np.nanmax(VSP1)/scale[0],vmax = np.nanmax(VSP1)/scale[0],
+               extent = [rindex.min(), rindex.max(), tindex1.max(), 
+                tindex1.min()], aspect = 'auto')
+
+    ax1.yaxis.grid(c = 'black', lw = .1)    
+    ax1.set_ylim(trange[1], trange[0]) # extents must be set    
+    ax1.set_xlim(drange[0], drange[1])    
+    ax1.set_xlabel('Receiver Depth')    
+    ax1.set_title('%s'%(txt1))
+
+    ax2.imshow(VSP2[:,:numsamp-1].T, cmap=cmap, interpolation='none',
+               vmin = -np.nanmax(VSP2)/scale[1],vmax = np.nanmax(VSP2)/scale[1],
+               extent = [rindex.min(), rindex.max(), tindex1.max(), 
+                tindex1.min()], aspect = 'auto')    
+    ax2.yaxis.grid(c = 'black', lw = .1)    
+    ax2.set_ylim(trange[1], trange[0]) # extents must be set    
+    ax2.set_xlim(drange[0], drange[1])    
+    ax2.set_xlabel('Receiver Depth')    
+    ax2.set_title('%s '%(txt2))    
+    ax2.set_yticklabels([])
+ 
+    ax3.imshow(VSP3[:,:numsamp-1].T, cmap=cmap, interpolation='none',
+               vmin = -np.nanmax(VSP3)/scale[2],vmax = np.nanmax(VSP3)/scale[2],
+               extent = [rindex.min(), rindex.max(), tindex1.max(), 
+               tindex1.min()], aspect = 'auto')
+    
+    ax3.yaxis.grid(c = 'black', lw = .1)    
+    ax3.set_ylim(trange[1], trange[0]) # extents must be set    
+    ax3.set_xlim(drange[0], drange[1])    
+    ax3.set_xlabel('Receiver Depth')    
+    ax3.set_title('%s '%(txt3))    
+    ax3.set_yticklabels([])  
+ 
+    ax4.imshow(VSP4[:,:numsamp-1].T, cmap=cmap, interpolation='none',
+               vmin = -np.nanmax(VSP4)/scale[3],vmax = np.nanmax(VSP4)/scale[3],
+               extent = [rindex.min(), rindex.max(), tindex1.max(), 
+               tindex1.min()], aspect = 'auto')
+
+    ax4.yaxis.grid(c = 'black', lw = .1)    
+    ax4.set_ylim(trange[1], trange[0]) # extents must be set    
+    ax4.set_xlim(drange[0], drange[1])    
+    ax4.set_xlabel('Receiver Depth')    
+    ax4.set_title('%s '%(txt4))
+    ax4.set_yticklabels([])    
+#    ax4.yaxis.set_label_position('right')    
+#    ax4.yaxis.set_ticks_position('right')
+    
+    ax5.imshow(VSP5[:,:numsamp-1].T, cmap=cmap, interpolation='none',
+               vmin = -np.nanmax(VSP5)/scale[4],vmax = np.nanmax(VSP5)/scale[4],
+               extent = [rindex.min(), rindex.max(), tindex1.max(), 
+               tindex1.min()], aspect = 'auto')
+
+    ax5.yaxis.grid(c = 'black', lw = .1)    
+    ax5.set_ylim(trange[1], trange[0]) # extents must be set    
+    ax5.set_xlim(drange[0], drange[1])    
+    ax5.set_xlabel('Receiver Depth')
+    ax5.set_yticklabels([])    
+
+    ax5.set_title('%s '%(txt5))
+#    ax5.yaxis.set_label_position('right')    
+#    ax5.yaxis.set_ticks_position('right')
+    
+    ax6.imshow(VSP6[:,:numsamp-1].T, cmap=cmap, interpolation='none',
+               vmin = -np.nanmax(VSP6)/scale[5],vmax = np.nanmax(VSP6)/scale[5],
+               extent = [rindex.min(), rindex.max(), tindex1.max(), 
+               tindex1.min()], aspect = 'auto')
+
+    ax6.yaxis.grid(c = 'black', lw = .1)    
+    ax6.set_ylim(trange[1], trange[0]) # extents must be set    
+    ax6.set_xlim(drange[0], drange[1])    
+    ax6.set_xlabel('Trace')    
+    ax6.set_title('%s '%(txt6))
+    ax6.yaxis.set_label_position('right')    
+    ax6.yaxis.set_ticks_position('right')
+
+    DPI = 200    
+    if (save =='Y') or (save =='y'):        
+        fig.savefig('data\\procflow_gray_%s.png' 
+        %(png_txt), dpi=DPI, bbox_inches = 'tight', pad_inches = .1)
+            
+    plt.show()
+    
+    if(info_gray4=='y')or(info_gray4=='Y'):        
+        print("\u0332".join('\nDecon Plot Global Information :'))
+        print (' Number of traces in plot :', VSP1.shape[0], 
+           ' Number of samples per trace :', ' tindex1 shape :,',tindex1.shape,
+           ' tindex1 min max :', tindex1.min(),tindex1.max())            
+
+        print (' Max an Min Amplitude Box 1. :',np.nanmax(VSP1),np.nanmin(VSP1))
+        print (' Max an Min Amplitude Box 2. :',np.nanmax(VSP2),np.nanmin(VSP2))
+        print (' Max an Min Amplitude Box 3. :',np.nanmax(VSP3),np.nanmin(VSP3))
+        print (' Max an Min Amplitude Box 4. :',np.nanmax(VSP4),np.nanmin(VSP4))
+        print (' Max an Min Amplitude Box 5. :',np.nanmax(VSP5),np.nanmin(VSP5))
+        print (' Max an Min Amplitude Box 6. :',np.nanmax(VSP6),np.nanmin(VSP6))
+        
 def plotcolor(thead, VSPdata,**kwargs):
 
     """Make an image plot of seismic traces.
@@ -480,7 +645,20 @@ def plotcolor(thead, VSPdata,**kwargs):
                        calculated from the complete data set
     color(colr) = chose a useful color map for data being plotted                  
     Title_plot = 'plot title '
-
+    
+    Example usage:
+    
+    cplot_params = {"pol":'n', 
+                    "Tmax":3500, "Tmin":500, 
+                    "show_time":'y', 
+                    "skiplabel":4,
+                    "samp_decimate":1,
+                    "fs":fs, 
+                    "norm":'n',
+                    "min_amp":-.1, "max_amp":.1,
+                    "color":'seismic',
+                    "title_top":'Decon Upgoing TWT '}
+    plotcolor(thead_dec_edit,corr_in,**cplot_params)
     """
 
     import numpy as np
@@ -704,6 +882,7 @@ def plot_param_top_grid(self):
     self.entryetr.insert(0, '%s'%(self.plotdata.shape[0]))
 
     self.plot_menu_exists = self.plot_paramframe.winfo_exists() 
+
 def plot_param_top(self):
     # create a toplevel window (pop-out) to get plot parameters
     # self.master is the root window in a form which can be passed to functions
