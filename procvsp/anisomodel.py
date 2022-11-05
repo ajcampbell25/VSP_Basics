@@ -237,6 +237,7 @@ def aniso_phase_calc(wvsptzoff,tu,Vpz,Vsz,epsilon,delta, save):
     import matplotlib.pyplot as plt
     from matplotlib  import gridspec
     import numpy as np
+    import warnings
     
     f = open(wvsptzoff, 'r')
 
@@ -297,6 +298,12 @@ def aniso_phase_calc(wvsptzoff,tu,Vpz,Vsz,epsilon,delta, save):
                     Slowx[k,] = 1/((SrcX[i,]-SrcX[(i-trcgath),])/(TTime[i,]-TTime[(i-trcgath),]))
 
                 else:
+                    # divide by zero is possible but will generate a warning which we can suppress                   
+                    #with warnings.catch_warnings():
+                    #    warnings.filterwarnings(action='ignore', category=RuntimeWarning, message='divide by zero encountered in double_scalars')
+                    denom=(TTime[i+trcgath,]-TTime[(i-trcgath),]) # if survey is perfectly symmetrical and 1d, this could be zero
+                    if denom==0:
+                        TTime[i+trcgath,] = TTime[i+trcgath,]+.00001 # add a tiny amount of time to avoid divide by zero                       
                     Slowx[k,] = 1/((SrcX[i+trcgath,]-SrcX[(i-trcgath),])/(TTime[i+trcgath,]-TTime[(i-trcgath),]))
                     
     # temporary fix to getting accurate slowness for edge points
