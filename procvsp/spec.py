@@ -32,10 +32,7 @@ def spec_1d(data, timerange, frange, thead, trace, fs,twin, title_spec):
     import matplotlib.ticker as mtick
 
     import numpy as np
-    import scipy.signal as sig
-    import scipy.fft    
-    import math 
-    from math import ceil
+
     import procvsp.utils as Utils
     
     dt =1/fs *1000             # sample rate in ms
@@ -46,53 +43,17 @@ def spec_1d(data, timerange, frange, thead, trace, fs,twin, title_spec):
 
     # extract analysis trace
     data_single, thead_single = Utils.chosetrace(data, thead, trace)    
-    data_single = data_single.T # samples in a column
 
     # useful headers
     TTobs_single = thead_single[:,8]
     zrcv_select = thead_single[:,2]
     trnum_single = thead_single[:,0]
+    
+    # generate the spectra for the chosen trace
+    X, X_db,freq = spectra(data_single,timerange, frange, thead, fs,twin)
 
-    ####### optimize number of samples for transform  #############
-
-    # for a segment of trace
-    if (twin =='y')or(twin=='Y'):
-        start = int(timerange[0]*(fs/1000))
-        stop = int(start+(timerange[1]*(fs/1000)))
-        data_trimd = data_single[start:stop,]
-        
-        # Apply window to segment
-        w=sig.tukey(data_trimd.shape[0], alpha=.1)    
-        data_win = data_trimd[:,0]*w        # Multiply trace by window
-        N = scipy.fft.next_fast_len(int(timerange[1]-timerange[0]*(fs/1000)))
-    
-    # for a full trace
-    else:
-        # Apply window to whole trace
-        w=sig.tukey(data_single.shape[0], alpha=.1)    
-        data_win = data_single[:,0]*w        # Multiply trace by window    
-        N = scipy.fft.next_fast_len(data_win.shape[0]) # in samples, best for scipy fft
-    
-    # pad with zeros if optimal N greater than trace or segment
-    if (N > data_win.shape[0]):                    
-        pad = N - data_win.shape[0]
-        data_win = np.pad(data_win, (0,int(pad)), 'constant')
-
-    ####### do the fft  #############
-    
-    X = scipy.fft.fft(data_win[:])      # from 0, to TT plus window 
-                                                 # [:] if a window is used    
-    X_db = 20*np.log10(np.abs(X)/np.max(np.abs(X)))# db=20*np.log10(S/np.max(S))
-    
-    freq = scipy.fft.fftfreq(X.shape[0], d=samprate)    # Generate plot frequency axis     
-#    f = np.arange(0, N)*fs/N                # alternate method
-                                                           
-    ####### Only keep positive frequencies #########
-    
-    keep = freq>=0    
-    X = X[keep]    
-    X_db = X_db[keep]    
-    freq = freq[keep]
+    X=X.T
+    X_db=X_db.T
 
     ############   make Spectral plots   ################
     
@@ -101,7 +62,7 @@ def spec_1d(data, timerange, frange, thead, trace, fs,twin, title_spec):
 
     ax1.plot(freq, np.absolute(X), c = 'red')  # using fftfreq to get x axis    
 
-    ax1.set_title('Amplitude Spectrum of %s at Depth %s'
+    ax1.set_title('Amplitude Spectrum of %s Depth %s'
                   %(title_spec, zrcv_select))    
     ax1.set_xlabel('Frequency hz')    
     ax1.set_xlim(frange[0], frange[1]) # extents must be set   
@@ -114,22 +75,84 @@ def spec_1d(data, timerange, frange, thead, trace, fs,twin, title_spec):
     
     ax2.plot(freq,X_db, c='blue') #using number of samples and sample rate to get x axis
     
-    ax2.set_title('Power Spectrum in db of %s at Depth %s'
+    ax2.set_title('Amplitude Spectrum (db) of %s Depth %s'
                   %(title_spec, zrcv_select))    
     ax2.set_xlabel('Frequency hz')
     ax2.set_xlim(frange[0], frange[1]) # extents must be set   
-    ax2.set_ylabel('Power(db)')    
+    ax2.set_ylabel('dB')    
     ax2.xaxis.grid()    
     ax2.yaxis.grid()
+    
+    plt.show() 
+    
+def spectra(idata, timerange, frange, thead, fs,twin):
 
-    plt.show()
+    import numpy as np
+    import scipy.signal as sig
+    import scipy.fft    
+
+    ####### window the trace to prevent edge effect in fft  #############
+    
+    dt =1/fs *1000             # sample rate in ms
+    samprate = 1/fs            #sample rate in seconds
+
+    ####### optimize number of samples for transform  #############
+
+    # for a segment of trace
+    if (twin =='y')or(twin=='Y'):
+        start = int(timerange[0]*(fs/1000))
+        stop = int(timerange[1]*(fs/1000))
+        idata_trimd = idata[:,start:stop]
+        
+        # Apply window to segment
+        w=sig.tukey(idata_trimd.shape[1], alpha=.1)    
+        idata_win = idata_trimd[:,:]*w.reshape(-1, w.shape[0])        # Multiply trace by window
+        N = scipy.fft.next_fast_len(int((timerange[1]-timerange[0])*(fs/1000)))
+    
+    # for a full trace
+    else:
+        # Apply window to whole trace
+        w=sig.tukey(idata.shape[1], alpha=.1)    
+        idata_win = idata[:,:]*w.reshape(-1, w.shape[0])        # Multiply trace by window    
+        N = scipy.fft.next_fast_len(idata_win.shape[1]) # in samples, best for scipy fft
+    
+    # pad with zeros if optimal N greater than trace or segment
+    #if (N > idata_win.shape[1]):                    
+    #    pad = N - idata_win.shape[1]
+    #    idata_win = np.pad(idata_win, ((0,0),(0,int(pad))), 'constant')        
+
+    ####################### do the fft  #####################################
+    X = np.zeros(shape = (idata_win.shape[0], N),dtype=np.complex_)
+    X_db = np.zeros(shape = (idata_win.shape[0],N))
+    X_pow = np.zeros(shape = (idata_win.shape[0],N))
+
+    for k in range(0,(idata_win.shape[0])):
+        
+        X[k,:] = scipy.fft.fft(idata_win[k,:], n = N)      # from 0, to TT plus window
+        X_db[k,:] = 20*np.log10(np.abs(X[k,:])/(np.abs(np.max(X[0,:])))) # db=20*np.log10(S/np.max(S)
+        #X_pow[k,:] = np.abs(X[k,:])**2 # power spectrum
+    # Only keep positive frequencies #########    
+    freq = scipy.fft.fftfreq(N, d=samprate)    # Generate plot frequency axis
+
+    keep = freq>=0
+    freq = freq[keep]
+    
+    X_posfreq = np.zeros(shape = (idata_win.shape[0], freq.shape[0]))
+    X_db_posfreq = np.zeros(shape = (idata_win.shape[0], freq.shape[0]))
+    #X_pow_posfreq = np.zeros(shape = (idata_win.shape[0], freq.shape[0]))
+    
+    X_posfreq = X[:, keep]
+    X_db_posfreq = X_db[:, keep]
+    #X_pow_posfreq = X_pow[:, keep]
+    
+    return X_posfreq, X_db_posfreq,freq
 
 def spec_FZ(idata, timerange, thead, fs,spacing, dbrange,frange, trrange,scale, title_spec, twin):
     ''' Frequency Analysis of every trace (F-Z)    
         Uses scipy fft 
         Number of taps defined using next_fast_len, not next pow 2
         
-        timerange - only the end time is used
+        timerange - time window to extract from traces
         frange - plot frequency range
         dbrange - plot db range
         trace - trace number to extract from 2D data array
@@ -137,8 +160,6 @@ def spec_FZ(idata, timerange, thead, fs,spacing, dbrange,frange, trrange,scale, 
         scale - scalar applied to amplitude of spectral plot
     '''
     import numpy as np
-    import math 
-    from math import ceil
     
     import scipy.signal as sig
     import scipy.fft    
@@ -164,59 +185,8 @@ def spec_FZ(idata, timerange, thead, fs,spacing, dbrange,frange, trrange,scale, 
            TTobs.shape)
     print (' trindex.min():',trindex.min(), ' trindex.max():',trindex.max())
     print ('fs :', fs,)
-
-    ####### window the trace to prevent edge effect in fft  #############
     
-    dt =1/fs *1000             # sample rate in ms
-    samprate = 1/fs            #sample rate in seconds
-
-    ####### optimize number of samples for transform  #############
-
-    # for a segment of trace
-    if (twin =='y')or(twin=='Y'):
-        start = int(timerange[0]*(fs/1000))
-        stop = int(start+(timerange[1]*(fs/1000)))
-        idata_trimd = idata[:,start:stop]
-        
-        # Apply window to segment
-        w=sig.tukey(idata_trimd.shape[1], alpha=.1)    
-        idata_win = idata_trimd[:,:]*w.reshape(-1, w.shape[0])        # Multiply trace by window
-        N = scipy.fft.next_fast_len(int(timerange[1]-timerange[0]*(fs/1000)))
-    
-    # for a full trace
-    else:
-        # Apply window to whole trace
-        w=sig.tukey(idata.shape[1], alpha=.1)    
-        idata_win = idata[:,:]*w.reshape(-1, w.shape[0])        # Multiply trace by window    
-        N = scipy.fft.next_fast_len(idata_win.shape[1]) # in samples, best for scipy fft
-    
-    # pad with zeros if optimal N greater than trace or segment
-    if (N > idata_win.shape[1]):                    
-        pad = N - idata_win.shape[1]
-        idata_win = np.pad(idata_win, ((0,0),(0,int(pad))), 'constant')        
-    print (' final idata_win shape :', idata_win.shape, ' idata shape :', idata.shape, ' N :', N)
-    
-    ####################### do the fft  #####################################
-    X = np.zeros(shape = (idata_win.shape[0], N),dtype=np.complex_)
-    X_db = np.zeros(shape = (idata_win.shape[0],N))
-    
-    for k in range(0,(idata_win.shape[0])):
-        
-        X[k,:] = np.abs(scipy.fft.fft(idata_win[k,:], n = N))      # from 0, to TT plus window
-        X_db[k,:] = 20*np.log10(np.abs(X[k,:])/(np.abs(np.max(X[0,:])))) # db=20*np.log10(S/np.max(S)
-    
-    # Only keep positive frequencies #########    
-    freq = scipy.fft.fftfreq(N, d=samprate)    # Generate plot frequency axis
-    keep = freq>=0
-    freq = freq[keep]
-    
-    print (' keep :', keep, ' keep.size :', keep.size, ' freq shape :', freq.shape)
-    
-    X_posfreq = np.zeros(shape = (idata_win.shape[0], freq.shape[0]))
-    X_db_posfreq = np.zeros(shape = (idata_win.shape[0], freq.shape[0]))
-    
-    X_posfreq = X[:, keep]
-    X_db_posfreq = X_db[:, keep]
+    X_posfreq,X_db_posfreq,freq=spectra(idata,timerange, frange, thead, fs,twin)
 
     ############   make amplitude-magnitude plots   ################
     
@@ -251,17 +221,19 @@ def spec_FZ(idata, timerange, thead, fs,spacing, dbrange,frange, trrange,scale, 
                           0.9*(pos.ymax-pos.ymin) ])
     cb1 = fig.colorbar(plot1, label = 'Amplitude', cax = axcol, aspect = 40,format='%.0e')
 
-    ############   make power plot   ################################
+    ############   make amplitude decibel plot   ################################
+
     plot2 = ax2.imshow(X_db_posfreq.T, cmap="gist_ncar_r", interpolation='none',aspect = 'auto',
                vmin = edb,
                vmax = sdb,
-               extent = [trindex.min(), trindex.max(), freq.max(), freq.min()])    
+               extent = [trindex.min(), trindex.max(), freq.max(), freq.min()])
+
     ax2.set_ylim(frange[1], frange[0]) # extents must be set    
     ax2.set_xlim(trrange[0], trrange[1])                           
     ax2.yaxis.grid()    
     ax2.set_xlabel('trace')    
     ax2.set_ylabel('frequency (hz)')    
-    ax2.set_title('Combined Power Spectra from %s'%(title_spec))    
+    ax2.set_title('Combined Amplitude Spectra (dB) from %s'%(title_spec))    
     textstr =  'Spectra min : %s'%(X_db_posfreq.min())    
     ax2.text(0.05, 0.05, textstr, transform=ax2.transAxes, fontsize=12,
              verticalalignment='top')
@@ -272,10 +244,11 @@ def spec_FZ(idata, timerange, thead, fs,spacing, dbrange,frange, trrange,scale, 
     pos2 = ax2.get_position()
     axcol2 = fig.add_axes([pos2.xmax + pad, pos2.ymin, width, \
                           0.9*(pos2.ymax-pos2.ymin) ])
-    cb2 = fig.colorbar(plot2, label = 'Power (db)', cax = axcol2, aspect = 40,format='%.1f')
-        
-    
-    plt.show()    
+    cb2 = fig.colorbar(plot2, label = 'dB', cax = axcol2, aspect = 40,format='%.1f')
+           
+    plt.show()
+ 
+    return np.abs(X_posfreq.T), X_db_posfreq.T,freq   
 
 def bandpass_filter(data, lowcut, highcut, fs, order, N, QCP):
     '''
@@ -346,107 +319,6 @@ def bandpass_filter(data, lowcut, highcut, fs, order, N, QCP):
 
     return buttfilt
 
-def simple_bpf_old(VSPdata, f1, f2, transL,transH, fs ):
-    
-    '''from excellent tutorial at:
-    https://tomroelandts.com/articles/how-to-create-simple-band-pass-and-band-reject-filters
-    
-    1. Create low pass and high pass windowed sync filters   
-    2. Convolve the 2 filters to get a band pass filter
-    3. Convolve the data trace with band pass filter. Numpy has an easy sinc generator
-    
-    - transL is the transition band or the low pass filter - the high frequency roll-off
-    - transH is the transition band or the high pass filter - the low frequency roll-off
-    '''
-    import numpy as np
-    import matplotlib.pyplot as plt
-    from matplotlib  import gridspec
-    
-    print("\u0332".join('\nSimple BPF Information :'))
-    
-    L=1024 # length of frequency response
-    samprate = 1/fs            #sample rate in seconds
-    
-    dt = 1/fs
- 
-    fL = f1/fs  # Cutoff frequency as a fraction of the sampling rate 
-    fH = f2/fs  # Cutoff frequency as a fraction of the sampling rate 
-    bL = transL/fs  # Transition band, as a fraction of the sampling rate 
-    bH = transH/fs  # Transition band, as a fraction of the sampling rate 
-    NL = int(np.ceil((4 / bH))) # samples in low pass
-    NH = int(np.ceil((4 / bL))) # samples in high pass
-
-    if not NL % 2: NL += 1  # Make sure that NL is odd.
-    nL = np.arange(NL)
-    if not NH % 2: NH += 1  # Make sure that NH is odd.
-    nH = np.arange(NH)
- 
-    # Compute a low-pass filter with cutoff frequency fH.
-    hlpf = np.sinc(2 * fH * (nL - (NL - 1) / 2))
-    hlpf *= np.blackman(NL)
-    hlpf = hlpf / np.sum(hlpf)
- 
-    # Compute a high-pass filter with cutoff frequency fL.
-    hhpf = np.sinc(2 * fL * (nH - (NH - 1) / 2))
-    hhpf *= np.blackman(NH)
-    hhpf = hhpf / np.sum(hhpf)
-    hhpf = -hhpf
-    hhpf[(NH - 1) // 2] += 1
-    
-    # Convolve both filters.    
-    h = np.convolve(hlpf, hhpf)
-
-    # Pad filter with zeros.
-    h_padded = np.zeros(L)
-    h_padded[0:h.shape[0]] = h
-    
-    # do the fft
-    H = np.abs(np.fft.fft(h_padded))
-    freq = np.fft.fftfreq(H.shape[0], d=dt)    # Generate plot frequency axis
-    #########
-    keep = freq>=0    
-    H = H[keep]    
-    freq = freq[keep]    
- 
-    # apply filter to data
-    BPFdata = np.zeros(shape = (VSPdata.shape[0], VSPdata.shape[1]), dtype=np.float32)          
-    for k in range(0,(VSPdata.shape[0])):        
-        BPFdata[k,:-1] = np.convolve(VSPdata[k,:-1],h, mode='same')
-
-    # Plot frequency response (in amplitude and dB) and impulse response                        
-    fig = plt.figure(figsize=(15,5))    
-    gs = gridspec.GridSpec(1, 3, width_ratios=[1,1,1], wspace = .25)
-    
-    ax1 = plt.subplot(gs[0])    
-    ax1.plot(freq,H)      
-    ax1.set_xlim(0, f2*2)       # subjective choice
-    ax1.set_xlabel('Frequency (Hz)')    
-    ax1.set_ylabel('Gain')    
-    ax1.grid(True)    
-#    ax1.legend(loc='best',borderaxespad=0, fontsize = 8)        
-    ax1.set_title('Simple Bandpass Frequency Response\n%s hz to %s hz passband \n%s hz low taper , %s hz high taper'%(f1, f2, transL, transH),fontsize=12)
-
-    ax2 = plt.subplot(gs[1])    
-    ax2.plot(freq, 20 * np.log10(H))      
-    ax2.set_xlim(0, f2*4)      # subjective choice
-    ax2.set_ylim(-200,0)       # subjective choice
-    ax2.set_xlabel('Frequency (Hz)')    
-    ax2.set_ylabel('Gain [dB]')    
-    ax2.grid(True)    
-#    ax2.legend(loc='best',borderaxespad=0, fontsize = 8)        
-    ax2.set_title('Simple Bandpass Frequency Response\n%s hz to %s hz passband \n%s hz low taper , %s hz high taper'%(f1, f2, transL, transH),fontsize=12)    
-    
-    ax3 = plt.subplot(gs[2])    
-    x = np.arange((-h.shape[0]*dt)/2, (h.shape[0]*dt)/2, dt)
-    ax3.plot(x,h, c='red')                                              
-    ax3.set_title('Simple Bandpass Impulse Response\n%s hz to %s hz passband \n%s hz low taper , %s hz high taper'%(f1, f2, transL, transH),fontsize=12)    
-    ax3.set_xlabel('Time (s)')        
-#    ax3.legend(loc='upper right',borderaxespad=0, fontsize = 8)        
-    ax3.grid(True)        
-    plt.show()
-
-    return BPFdata
-
 def simple_bpf(VSPdata, tf1,tf2,tf3,tf4, fs, qc ):
 #def simple_bpf(VSPdata, f1, f2, transL, transH, fs, qc ):
     
@@ -477,7 +349,8 @@ def simple_bpf(VSPdata, tf1,tf2,tf3,tf4, fs, qc ):
     
     VSPdata=VSPdata.T
     
-#    print("\u0332".join('\nSimple BPF Information :'))
+    #print("\u0332".join('\nSimple BPF Information :'))
+    #print (' VSPdata.shape :',VSPdata.shape)
     
     L=1024 # length of frequency response
     samprate = 1/fs            #sample rate in seconds
@@ -505,8 +378,6 @@ def simple_bpf(VSPdata, tf1,tf2,tf3,tf4, fs, qc ):
     bH = (tf4-tf3)/fs
     NL=int(np.ceil((4/bH)))
     NH=int(np.ceil((4/bL)))    
-    #print (' testfL :', testfL,' testfH :', testfH)      
-    #print (' testNL :', testNL,' testNH :', testNH)
     
     if not NL % 2: NL += 1  # Make sure that NL is odd.
     nL = np.arange(NL)
@@ -535,7 +406,7 @@ def simple_bpf(VSPdata, tf1,tf2,tf3,tf4, fs, qc ):
     # do the fft
     H = np.abs(np.fft.fft(h_padded))
     freq = np.fft.fftfreq(H.shape[0], d=dt)    # Generate plot frequency axis
-    #########
+    ######### get rid of negative frequencies
     keep = freq>=0    
     H = H[keep]    
     freq = freq[keep]
@@ -544,6 +415,7 @@ def simple_bpf(VSPdata, tf1,tf2,tf3,tf4, fs, qc ):
     # should be 1
     VSPdata=np.squeeze(VSPdata)
     numdims=VSPdata.ndim
+    # print (' VSPdata.shape after squeeze :',VSPdata.shape)
     
     if numdims == 1:
         BPFdata = np.zeros(shape = (VSPdata.shape), dtype=np.float32)
@@ -551,10 +423,10 @@ def simple_bpf(VSPdata, tf1,tf2,tf3,tf4, fs, qc ):
     else:  
         # apply filter to data
         BPFdata = np.zeros(shape = (VSPdata.shape[0], VSPdata.shape[1]), dtype=np.float32)          
-        for k in range(0,(VSPdata.shape[0])):        
-            BPFdata[k,:-1] = np.convolve(VSPdata[k,:-1],h, mode='same')
-        
-#    print (' BPFdata.shape :',BPFdata.shape)
+        for k in range(0,(VSPdata.shape[1])):        
+            #BPFdata[k,:-1] = np.convolve(VSPdata[k,:-1],h, mode='same')
+            BPFdata[:,k] = np.convolve(VSPdata[:,k],h, mode='same')
+
     if (qc=='y')or(qc=='Y'):
     # Plot frequency response (in amplitude and dB) and impulse response
         fig = plt.figure(figsize=(15,5))    
@@ -566,8 +438,6 @@ def simple_bpf(VSPdata, tf1,tf2,tf3,tf4, fs, qc ):
         ax1.set_xlabel('Frequency (Hz)')    
         ax1.set_ylabel('Gain')    
         ax1.grid(True)    
-#        ax1.legend(loc='best',borderaxespad=0, fontsize = 8)        
-#        ax1.set_title('Simple Bandpass Frequency Response\n%s hz to %s hz passband \n%s hz low taper , %s hz high taper'%(f1, f2, transL, transH),fontsize=12)
         ax1.set_title('Simple Bandpass Frequency Response\n%s/%s - %s/%s hz corner frequencies'
                       %(tf1, tf2, tf3, tf4),fontsize=12)
 
@@ -577,21 +447,18 @@ def simple_bpf(VSPdata, tf1,tf2,tf3,tf4, fs, qc ):
         ax2.set_ylim(-200,0)       # subjective choice
         ax2.set_xlabel('Frequency (Hz)')    
         ax2.set_ylabel('Gain [dB]')    
-        ax2.grid(True)    
-#         ax2.legend(loc='best',borderaxespad=0, fontsize = 8)        
-#        ax2.set_title('Simple Bandpass Frequency Response\n%s hz to %s hz passband \n%s hz low taper , %s hz high taper'%(f1, f2, transL, transH),fontsize=12)    
+        ax2.grid(True)        
         ax2.set_title('Simple Bandpass Frequency Response\n%s/%s - %s/%s hz corner frequencies'
                       %(tf1, tf2, tf3, tf4),fontsize=12)    
     
         ax3 = plt.subplot(gs[2])    
         x = np.arange((-h.shape[0]*dt)/2, (h.shape[0]*dt)/2, dt)
-        ax3.plot(x,h, c='red')                                              
-#        ax3.set_title('Simple Bandpass Impulse Response\n%s hz to %s hz passband \n%s hz low taper , %s hz high taper'%(f1, f2, transL, transH),fontsize=12)    
+        ax3.plot(x,h, c='red')                                                 
         ax3.set_title('Simple Bandpass Impulse Response\n%s/%s - %s/%s hz corner frequencies'
                       %(tf1, tf2, tf3, tf4),fontsize=12)    
-        ax3.set_xlabel('Time (s)')        
-#        ax3.legend(loc='upper right',borderaxespad=0, fontsize = 8)        
+        ax3.set_xlabel('Time (s)')                
         ax3.grid(True)        
+        
         plt.show()
 
     return BPFdata.T    
