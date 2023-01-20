@@ -20,7 +20,7 @@ def tar(VSP, thead, fs, exp):
     plt.figure(figsize=(15,7))    
     ax1 = plt.subplot(111)
    
-    ax1.plot(time, gainfunc.reshape(-1,1), c = 'red')  # using fftfreq to get x axis    
+    ax1.plot(time, gainfunc.reshape(-1,1), c = 'red')  
     ax1.set_title('T**%s Gain Function'%(exp))   
     ax1.set_xlabel('Time(ms)')    
     ax1.xaxis.grid()    
@@ -130,13 +130,13 @@ def normalize (Seismic, norm, thead, scal):
     import numpy as np
     import matplotlib.pyplot as plt
      
-#    print("\u0332".join('\nNormalization Stats :'))
+    print("\u0332".join('\nNormalization Stats :'))
     
     rdepth = thead[:,2]
     
     data2 = np.zeros(shape = (Seismic.shape[0], Seismic.shape[1]), dtype=np.float32)    
     #data1 = Seismic
-    
+    print (' norm :',norm) 
     if (norm == 'Y') or (norm =='y'):        
         #row_sums = np.linalg.norm(data1, axis=1)        
         #print (' row_sums shape', row_sums.shape)        
@@ -147,8 +147,8 @@ def normalize (Seismic, norm, thead, scal):
         data2 = (Seismic / ampmax[:, np.newaxis])        
         datascaled = data2 * scal
         
-        amp_pre=np.amax(Seismic, axis=1) # for before-after plot
-        amp_post=np.amax(datascaled, axis = 1) # for before-after plot
+        amp_pre=np.nanmax(np.abs(Seismic), axis=1) # for before-after plot
+        amp_post=np.nanmax(np.abs(datascaled), axis = 1) # for before-after plot
             
         plt.figure(figsize=(14,5))    
         ax1 = plt.subplot(121)
