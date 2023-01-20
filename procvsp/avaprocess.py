@@ -1,5 +1,7 @@
 def scattering_matrix(vp1, vs1, vp0, vs0, rho1, rho0, theta1):
     '''
+    Adapted from https://github.com/agilescientific/bruges/blob/main/bruges/reflection/reflection.py
+    
     Full Zoeppritz solution, considered the definitive solution.
     Calculates the angle dependent p-wave reflectivity of an interface
     between two mediums.
@@ -80,6 +82,8 @@ def scattering_matrix(vp1, vs1, vp0, vs0, rho1, rho0, theta1):
 
 def shuey(vp1, vs1, vp2, vs2, rho1, rho2, theta1):
     """
+    Adapted from https://github.com/ffigura/avo/blob/master/1_synthetic/avo_func.py
+    
     Computes the P-wave reflectivity with Shuey (1985) 2 and 3 terms for a 
     two-layerd model.
     Avseth et al., Quantitative seismic interpretation, 2006, Page 182.
@@ -135,6 +139,8 @@ def shuey(vp1, vs1, vp2, vs2, rho1, rho2, theta1):
 def ruger(vp1, vs1, vp2, vs2, rho1, rho2,d1,  d2, e1,  e2, theta1):
 
     """
+    Adapted from https://github.com/agilescientific/bruges/blob/main/bruges/rockphysics/anisotropy.py
+    
     Coded by Alessandro Amato del Monte and (c) 2016 by him
     https://github.com/aadm/avo_explorer/blob/master/avo_explorer_v2.ipynb
     
@@ -199,6 +205,8 @@ def calc_rc( vp, vs, rho,eps,delta,eqn, maxangle ):#theta1_samp
         theta1_samp : n-samples of incidence angles,
         rc_all : Reflection coefficient at layer1 / layer2,
                 and at layer2 / layer3
+                
+    Adapted from https://github.com/TolaAbiodun/pyavo/blob/master/pyavo/seismodel/tuning_prestack.py           
     """
     import numpy as np
     
@@ -297,7 +305,11 @@ def model_rc(vp_d,rc_all, angle,dt,**kwargs):
     thickness : thickness of the middle layer in meters
     dt : time sample rate in seconds
     timlength : length of Ricker wavelet in seconds
-    flimits: central frequency of Ricker wavelet
+    flimits: central frequency of Ricker wavelet 
+    
+    This function was inspired by the notebook:
+    
+    https://github.com/ffigura/avo/blob/master/1_synthetic/2_avo_synthetic.ipynb
     '''
     import numpy as np
     import scipy.signal as sig
