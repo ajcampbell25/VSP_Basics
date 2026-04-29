@@ -11,8 +11,6 @@ def wavtrace(vsp, trheaders, wave, aligntime, numsamp, fs):
     remember data arrays are in sample numbers - different sample rates have to be compensated
     """
     import numpy as np
-    import matplotlib as plt
-#    import procvsp.utils as utilvsp
     from procvsp.utils import shift  
     
     thead_copy = np.copy(trheaders)    
@@ -47,29 +45,7 @@ def wavtrace(vsp, trheaders, wave, aligntime, numsamp, fs):
           ' waveshift shape :' , waveshift.shape,
           ' waveshift_plot shape :', waveshift_plot.shape
           )    
-    '''        
-    plt.figure(figsize=(12,5))    
 
-    ax1=plt.subplot(2,1,1)
-    ax1.set_title("wavelets unshifted")
-    ax1.plot(plot_time,wavelets_plot, c='black')
-    ax1.set_xlabel('Time (ms)')
-    ax1.xaxis.grid()
-    ax1.yaxis.grid()
-    ax1.set_xlim(0,plot_time.max())
-    
-    ax2=plt.subplot(2,1,2)
-    ax2.set_title("wave shifted")
-    ax2.plot(plot_time,waveshift_plot, c='black')
-    ax2.set_xlabel('Time (ms)')
-    ax2.xaxis.grid()
-    ax2.yaxis.grid()
-    ax2.set_xlim(0,plot_time.max())
-
-    plt.tight_layout()
-
-    plt.show()
-    '''    
     return waveshift.T
     
 def Weiner_waveshape_decon(trin_up,trdsign_dwn,theaders_all,**kwargs):    
@@ -130,7 +106,7 @@ def Weiner_waveshape_decon(trin_up,trdsign_dwn,theaders_all,**kwargs):
        bandpass parameters
     
     '''
-    import math 
+
     from math import ceil
     import scipy.signal as sig
     from scipy.linalg import solve_toeplitz   
@@ -140,7 +116,6 @@ def Weiner_waveshape_decon(trin_up,trdsign_dwn,theaders_all,**kwargs):
     
     import procvsp.spec as specvsp
     import procvsp.decon as dec
-    import procvsp.sigproc as sgp
     import procvsp.wavelets as waves
 
     
@@ -161,6 +136,8 @@ def Weiner_waveshape_decon(trin_up,trdsign_dwn,theaders_all,**kwargs):
     qc_plot = kwargs['qc_plot']
     qc_trc = kwargs['qc_trc'] - 1
     endplot = kwargs['endplot']
+
+    endplot = endplot*fs/1000
 
     print("\u0332".join('\nWeiner_waveshape Parameters :'))
     print (' fs  :', fs, '\n', 'N :', N,
@@ -261,6 +238,8 @@ def Weiner_waveshape_decon(trin_up,trdsign_dwn,theaders_all,**kwargs):
     for k in range(0,(decon_dwn_all.shape[1])):
         if (BPF_type=='B')or(BPF_type=='b'):
             if k==0:
+                # Apply the filter on the first iteration and:
+                # print a qc plot of the filter response 
                 decon_dwn_filt[:,k] = specvsp.bandpass_filter(decon_dwn_all[:,k], lowcut, 
                                                      highcut, fs, order, N, QCP='y')        
                 decon_up_filt[:,k] = specvsp.bandpass_filter(decon_up_all[:,k], lowcut, 
@@ -290,14 +269,14 @@ def Weiner_waveshape_decon(trin_up,trdsign_dwn,theaders_all,**kwargs):
     # plot a single trace of data before and after decon as well as acor and xcor
     if (qc_plot == 'y')or(qc_plot == 'Y'):
         
-        x_limit = int(endplot/dt) # plotting limit for test trace
+        x_limit = int(endplot) # plotting limit for test trace
         
         # create a dictionary so that names and data sets are tied together
         plot_data = {
                    'Windowed Downgoing':trdwin[:x_limit,qc_trc],
                    'Windowed Wavelet': wave[:x_limit],
                    'Auto correlation':ac_all[:x_limit,qc_trc],
-                   'Cross correlation':cc_all[:int(winlngth/dt)*2,qc_trc],
+                   'Cross correlation':cc_all[:int(winlngth)*2,qc_trc],
                    'Aligned Downgoing':trdsign[:x_limit,qc_trc],
                    'Deconvolved down':decon_dwn_all[:x_limit,qc_trc],
                    'Upgoing ':trin_up[:x_limit,qc_trc],
@@ -313,10 +292,11 @@ def Weiner_waveshape_decon(trin_up,trdsign_dwn,theaders_all,**kwargs):
         values = list(plot_data.values())
         
         #fix the centering of cc for plotting with symmetric time
-        print (' np.argmax(cc_all[:,qc_trc]) :',np.argmax(cc_all[:,qc_trc]))
-        values[3] = values[3][:int(winlngth/dt)*2]
-        cc_start = values[3].shape[0]//2 - int(winlngth/dt)//2
-        cc_end = values[3].shape[0]//2 + int(winlngth/dt)//2
+        print (' cc_all.shape :',cc_all.shape, 'np.argmax(cc_all[:,qc_trc]) :',np.argmax(cc_all[:,qc_trc]))
+        values[3] = values[3][:int(winlngth)*2]
+        cc_start = values[3].shape[0]//2 - int(winlngth)//2
+        cc_end = values[3].shape[0]//2 + int(winlngth)//2
+        print (' cc_start :',cc_start,' cc_end :',cc_end)
         
         gs = gridspec.GridSpec(10, 1, height_ratios=[1,1,1,1,2.5,2.5,1,1,1,3], hspace = .5)
         fig = plt.figure(figsize=(14,25))
@@ -327,11 +307,12 @@ def Weiner_waveshape_decon(trin_up,trdsign_dwn,theaders_all,**kwargs):
             # make xtime longer for xcorr plot only
             if n==3:
                 values[n] =values[n][cc_start:cc_end,]
-                xtime = np.arange(-values[n].shape[0]//2,values[n].shape[0]//2,dt)
-#                values[n] =values[n]
-#                xtime = np.arange(0,values[n].shape[0],dt)
+                numsamp = values[n].shape[0]
+                xtime = np.arange(-numsamp//2*(1000/fs),numsamp//2*(1000/fs),dt)
+                #xtime = np.arange(0,numsamp*(1000/fs),dt)
             else:
-                xtime = np.arange(0,values[n].shape[0],dt)
+                numsamp = values[n].shape[0]
+                xtime = np.arange(0,numsamp*(1000/fs),dt)
                 values[n] =values[n]
             ax.plot(xtime,values[n], c='black')
             ax.set_title(titles[n] + " For Trace %s"%(qc_trc))
@@ -345,7 +326,7 @@ def Weiner_waveshape_decon(trin_up,trdsign_dwn,theaders_all,**kwargs):
 
         ax.set_xlabel('Time(ms)') 
         ax.plot(xtime,values[4], c='black')
-        ax.plot(xtime,values[5]*scal, c='brown')
+        ax.plot(xtime,values[5]*1/scal, c='brown')
         ax.annotate(declabel, xy=declabelxy, ha='center', va='center')
         ax.set_title(titles[5] + ' For Trace %s'
                      ', Pre-decon trace scaled for display'%(qc_trc))
@@ -356,21 +337,7 @@ def Weiner_waveshape_decon(trin_up,trdsign_dwn,theaders_all,**kwargs):
             
     return decon_dwn_filt.T,decon_up_filt.T
     
-def chosetrace(VSP, thead, num):
-    ''' chose a trace for decon testing- old way
-    Still necessary for spiking decon which needs to be finished
-    
-    Useage:    
-    trace = 61
-    downsingle, theader_dec1 = chosetrace(down_edit,thead_dec_edit, trace)     
-    upsingle, _ = chosetrace(up_edit, thead_dec_edit, trace) 
-    
-    '''    
-    theadnew = thead[num:num+1,]
-    datanew = VSP[num:num+1,]
 
-    return datanew, theadnew
-    
 def spike_decon_1trace(trin,trdsign,thead_single,fs,**kwargs):    
     ''' Adapted from Crewes MATLAB routine
     def deconw(trin=None,trdsign=None,n=None,stab=None,wndw=None,*args,**kwargs):
@@ -407,81 +374,119 @@ def spike_decon_1trace(trin,trdsign,thead_single,fs,**kwargs):
     spike_decon_1trace,spike_decon_1trace_bpf = Weiner_spike_decon_1trace(
                          upsingle,downsingle,theader_dec1, fs,**spike_params)
     '''
-    import math 
-    from math import ceil
-    import scipy.signal as sig
-    from scipy.linalg import solve_toeplitz   
+    from scipy.linalg import solve_toeplitz
     import numpy as np
     import matplotlib.pyplot as plt
-    
-    import procvsp.sigproc as sgp
     import procvsp.spec as specvsp
-    
+
     Tmin = kwargs['stime'] 
-    Tmax = kwargs['etime'] 
+    Tmax = kwargs['etime']
+    aligntime = kwargs['aligntime']
     lowcut = kwargs['lowcut']          # Butterworth filter parameters
     highcut = kwargs['highcut'] 
     order = kwargs['order'] 
     N = kwargs['numfsamp']  #= 1024
+    n=N
+    winlngth = kwargs['winlngth']   # chop out a window from the downgoing trace
     wintap = kwargs['window']       # apply a window to prevent spectral leackage in fft
     wndw = kwargs['wndw']           # window type    
     stab = kwargs['stab'] 
-    
-    
+
+    dt =1/fs *1000   # sample rate in ms
+    winlngth = int(winlngth/dt)
+    #    start = (int(ceil(aligntime) / dt))    # direct arrival plus a window 
+    start = 0
+    stop = int(start + winlngth) *2               # Do for VSProwess comparison
+
     thead_one = np.copy(thead_single)
     TTobs_single = thead_one[:,8]
-    
-    Data_norm = 'n'
-    DScalar = 1
 
-    trdsign_nrm = sgp.normalize(trdsign, Data_norm,thead_one, DScalar)    
+    Data_norm = 'y'
+    DScalar = 1
+    '''
+    trdsign_nrm = normalize(trdsign, Data_norm,thead_one, DScalar)    
     trdsign = trdsign_nrm.T    
-    trdwin  = trdsign[0:2000]      # could add a section to window the downgoing as done in waveshape decon
+    trdwin  = trdsign[0:stop]      # could add a section to window the downgoing as done in waveshape decon
+    trdwin = trdwin.reshape(-1)
+    trdsign = trdsign.reshape(-1)
+    '''
+    trdsign = trdsign.T    
+    trdwin  = trdsign[start:stop]      # could add a section to window the downgoing as done in waveshape decon
     trdwin = trdwin.reshape(-1)
     trdsign = trdsign.reshape(-1)
 
-    ac = np.correlate(trdwin, trdwin,mode='full')[len(trdwin)-1:]     
+    ac = np.correlate(trdwin, trdwin,mode='full')[len(trdwin)-1:]
 
     # window the autocorrelation
     if (wndw == 2):
         w=np.linspace(1,0,n)
-        ac=multiply(ac,w)
+        ac=ac*w
 
     else:
         if (wndw == 3):
             #make g 2 sigma down at n
             sigma=n / 2
-            g=exp(- (arange(0,n - 1)) ** 2 / sigma ** 2)
-            a=multiply(ac,g)
+            g=np.exp(- (np.arange(0,n - 1)) ** 2 / sigma ** 2)
+            ac=ac*g
             
     #   stabilize the autocorrelation
-    ac[0]=ac[0]*(1.0 + stab)    
+    ac[0]=ac[0]*(1.0 + stab)
+
+    # locate the index number of auto-correlation maximum
+    ac_ind = np.argmax(ac)
+    # find the max amplitude of the auto-correlation    
+    ac_max = ac[ac_ind]
+
     # generate the right hand side of the normal equations
-    b = np.hstack((np.ones(1), np.zeros(len (ac)-1)))    
+    # make sure spike has amplitude of maximum of auto-correlation
+    b = np.hstack((np.ones(1)*ac_max, np.zeros(len (ac)-1)))    
     # do the levinson recursion
     x = solve_toeplitz(ac,b)
     # apply the filter
     decon = np.convolve(trdsign, x, mode = 'full')    
     decon = decon[0:len(trdsign)]
-    
-    buttfilt_decon = specvsp.bandpass_filter(decon, lowcut , highcut, fs, order, N, QCP='y')
-    
-    plt.figure(figsize=(14, 12))    
 
-    ax1=plt.subplot(3,1,1)
+    buttfilt_decon = specvsp.bandpass_filter(decon, lowcut , highcut, fs, order, N, QCP='y')
+        
+    # get the location of the max ac for qc plot annotation
+    aclabelxy = (ac_ind, np.max(ac))    
+    aclabel = 'ac Max. Amp %s'%(ac_max)    
+
+    plt.figure(figsize=(14, 25))    
+
+    ax1=plt.subplot(6,1,1)
     ax1.plot(trdsign)
-    ax1.set_title("down")
-    ax2=plt.subplot(3,1,2)
+    ax1.plot(trdwin)
+    ax1.set_title("down and windowed down")
+    ax2=plt.subplot(6,1,2)
     ax2.plot(ac)
     ax2.set_title("auto correlation")
-    ax3=plt.subplot(3,1,3)
-    ax3.set_title("BPF spiking deconvolved Down and Input Down")
-    ax3.plot(trdsign)
-    ax3.plot(buttfilt_decon)
+    ax2.annotate(aclabel, xy=aclabelxy, ha='center', va='center')
+    ax3=plt.subplot(6,1,3)
+    ax3.set_title("right side input to Toeplitz (spike)")    
+    ax3.plot(b)
+    ax4=plt.subplot(6,1,4)
+    ax4.plot(x)
+    ax4.set_title("Decon Filter")
+    ax5=plt.subplot(6,1,5)
+    ax5.set_title("deconvolved Down and Input Down")
+    ax5.plot(trdsign)
+    ax5.plot(decon)#*14.41)
+    ax6=plt.subplot(6,1,6)
+    ax6.set_title("BPF spiking deconvolved Down and Input Down")
+    ax6.plot(trdsign)
+    ax6.plot(buttfilt_decon)
     plt.tight_layout()
     plt.show()
 
+    print("\u0332".join('\nSpike Decon Parameters :'))
+    print(' fs :',fs,' dt :',dt)
+    print(' start :',start,' stop :',stop)
+    print(' winlngth :',winlngth,' aligntime :',aligntime)
+    print(' decon :',decon)
+        
     return decon,buttfilt_decon
+
     
 def VSP_decon(vspup,vspdown,TTobs_single,stab,samprate,Tmax, Tmin, zrcv_select, spacing, trnum,              
               lowcut, highcut, order, wintap):    
@@ -500,7 +505,11 @@ def VSP_decon(vspup,vspdown,TTobs_single,stab,samprate,Tmax, Tmin, zrcv_select, 
     % G.F. Margrave, 2014, CREWES
     %
     % NOTE: This SOFTWARE may be used by any individual or corporation for any purpose
-    '''    
+    '''
+    import numpy as np
+    import procvsp.spec as specvsp
+    from scipy.fft import ifft
+
     vspup = vspup.T
     vspdown = vspdown.T
     
@@ -515,69 +524,331 @@ def VSP_decon(vspup,vspdown,TTobs_single,stab,samprate,Tmax, Tmin, zrcv_select, 
     if (wintap == 'y') or (wintap =='Y'):
         
         import math 
-        from math import ceil
-        
+        from math import ceil        
         win = 2048                                   # Don't really need to make window a power of 2 
                                                      # but VSProwess does, so this allows comparison
-    
         start = (ceil(TTobs_single) * int(dt))       # Want to include data from start - direct arrival - plus a window length
-
         stop = int(start + win/2)                    # Divide window by 2 for VSProwess comparison
 
         vspup = vspup[0:stop,]                       # Apply window to whole trace so that the direct arrival
         vspdown = vspdown[0:stop,]                   # does not get tapered just end of trace
-
 #        w = np.blackman(N) # design a window 
 #        w = np.kaiser(N,5) # design a window 
 #        w = np.hamming(N) # design a window 
-        w = np.hanning(N) # design a window
+        w = np.hanning(win) # design a window
 #        w = np.bartlett(N) # design a window
 
         for k in range(0,(vspdown.shape[1])):
             vspup = vspup[:,k]*w                    # Multiply trace by window    
-
             vspdown = vspdown[:,k]*w                # Multiply trace by window 
-
         vspup = vspup.reshape(vspup.shape[0],-1)
-
         vspdown = vspdown.reshape(vspdown.shape[0],-1)
-
-    
-####### deconvolve by dividing upgoing fft by downgoing fft  #############    
-    
    
-    
-    vspupd=np.zeros(vspup.shape)
-    
+####### deconvolve by dividing upgoing fft by downgoing fft  #############    
+       
+    vspupd=np.zeros(vspup.shape)   
     print('vspup shape', vspup.shape,'vspupd shape', vspupd.shape)
     
     for k in range(0,(vspdown.shape[1])):
             u=vspup[:,k]
             d=vspdown[:,k]
-
             U=np.fft.fft(u)
-
             D=np.fft.fft(d)
-
             A=np.max(np.absolute(D), axis = 0)
-
             Ud=U / (D +(stab*A))
 
             ud=ifft(Ud)
-
             vspupd[:,k]=ud
-
-    scale = A *scaler
 
 ######## apply a BPF to deconvolved upgoing #########    
         
-    numfsamp = 512       # should test optimizing this
-    
+    numfsamp = 512       # should test optimizing this    
     vspupdfilt=np.zeros(vspup.shape)
-
-    for k in range(0,(vspupd.shape[1])):
-        
-        vspupdfilt[:,k] = butter_bandpass_filter(vspupd[:,k], lowcut, highcut, fs, order, numfsamp)
+    for k in range(0,(vspupd.shape[1])):        
+        vspupdfilt[:,k] = specvsp.bandpass_filter(vspupd[:,k], lowcut, highcut, fs, order, numfsamp)
 
     return vspupd.T, vspupdfilt.T
-      
+
+def predict_decon(up_flat,down_flat,theaders_all,**kwargs):    
+    '''
+    trout,x= deconpr(trin,trdsign,nop,nlag,stab)
+    trout,x= deconpr(trin,trdsign,nop,nlag)
+    DECONPR performs Wiener predictive deconvolution by calling PREDICT to design a prediction filter,
+    nop long with lag nlag and stab factor, using trdsign. The predicted part of trin, trinpr, is
+    formed by convolving the prediction operator with trin. The output trace, trout, is computed by
+    delaying trinpr by nlag samples and subtracting it from trin. The prediction operator is returned
+    in x.
+
+    trin= input trace to be deconvolved
+    trdsign= input trace used to design the prediction operator
+    nop= number of points in the prediction operator
+    nlag= prediction lag distance in samples
+    stab= stabilazation factor expressed as a fraction of the zero
+       lag of the autocorrelation.
+    ************ default= .0001 ***********
+
+    trout= deconvolved output trace
+    x= prediction operator
+
+    NOTE: if trin is a matrix, then each column is deconvolved and trdsign
+    must have the same number of columns as trin.
+
+    See also: Peacock and Treitel, Geophysics vol 34, 1968
+    and the description of PREDICT
+
+    by G.F. Margrave, July 1991
+     
+    % prfilt= predict(trin,nop,nlag,stab)
+    prfilt= predict(trin,nop,nlag)
+    prfilt= predict(trin,nop)
+
+    PREDICT returns the nop long Wiener prediction filter for a  
+    lag of nlag time samples. The filter is designed on the input
+    trace, trin, and a stab factor is included by multiplying the 
+    zero lag of the normalized autocorrelation by 1+stab.
+
+    trin= input trace used to design the prediction operator
+    nop= number of points in the prediction operator
+    nlag= prediction lag distance in samples
+    *********** default= 1 **************
+    stab= stabilazation factor expressed as a fraction of the zero
+       lag of the autocorrelation.
+    ************ default= .0001 ***********
+    prfilt= minimum phase Wiener prediction filter. Designed
+     such that:  prediction error= p.e.=> 
+     p.e.=trin(nlag:length(trin))-trinpr(1:length(trin)-nlag+1)
+     has minimum squared length and where:
+    trinpr= conv(trin,prfilt) is the predictable part of trin
+
+    Re: Peacock and Treitel, Geophysics vol 34, 1968
+ 
+    by: G.F. Margrave, July 1991
+
+    NOTE: This SOFTWARE may be used by any individual or corporation for any purpose
+    with the exception of re-selling or re-distributing the SOFTWARE.
+    By using this software, you are agreeing to the terms detailed in this software's
+    Matlab source file.
+
+   
+    My adaptations:
+    Code:
+    1. Combine PREDICT and DECONPR functions, convert to python
+    Input Data:
+    1. Flatten the downgoing waves at alignment time
+    
+    Decon: 
+
+    1. Design the filters on the downgoing waves, one operator per trace.
+    2. Use aligntime to shift prediction before subtracting
+    
+    aligntime = downgoing wave alignment time
+    stab = pre-whitening stabilization factor expressed as a fraction of the
+           zero lag of the autocorrelation.
+    lowcut = low freq. for Butterworth wavelet and post decon bandpass filter
+    highcut = high freq. for Butterworth wavelet and post decon bandpass filter
+    order = order for Butterworth wavelet and post decon bandpass filter
+    wndw = apply a window to autocorr 1= do nothing 
+           2 and 3 to be developed
+           
+    Useage comments:
+    1. Stab should be in range .0001 to .001. 
+    2. Stab affects relative amplitudes, stab = 0 gets deconned down similar 
+       to wavelet
+
+    '''
+    import numpy as np
+    from scipy.linalg import solve_toeplitz
+    import matplotlib.pyplot as plt
+    from matplotlib  import gridspec
+    
+    import procvsp.utils as utilvsp
+    import procvsp.spec as specvsp
+
+    aligntime = kwargs['aligntime']
+
+    stab = kwargs['stab']
+    tgap = kwargs['tgap']
+    td = kwargs['tlen']
+    fs = kwargs['fs']
+    first_rcv,last_rcv=kwargs['tr_range']
+    qc_plot = kwargs['qc_plot']
+    qc_trc = kwargs['qc_trc'] - 1
+    endplot = kwargs['endplot']
+
+    lowcut,highcut,order = kwargs['Buttf'] 
+    tf1,tf2,tf3,tf4 = kwargs['Trapf']
+    BPF_type = kwargs['BPF_type'] 
+    N = kwargs['numfsamp']  #= 1024
+
+    print("\u0332".join('\nPredictive Decon Parameters :'))
+    print (' fs  :', fs,'aligntime :', aligntime)
+    print (' \ntgap :',tgap,' td :',td)
+    
+    ########### chop out a test section of data ################ 
+    trin_up, thead_inpr = utilvsp.depthlimit(up_flat,theaders_all, 
+                                           first_rcv, last_rcv)      
+    trdsign_dwn, _ = utilvsp.depthlimit(down_flat,theaders_all, 
+                                           first_rcv, last_rcv)
+            
+    theaders_all_copy = np.copy(thead_inpr)
+    TTobs_all = theaders_all_copy[:,8]
+    
+    # convert sample from hertz to ms
+    dt =1/fs *1000   # sample rate in ms
+    nyq=0.5*fs       # nyquist frequency
+    
+    # transpose data matrices to 1 trace per column
+    trdsign = trdsign_dwn.T    
+    trin_up = trin_up.T    
+    print (' trdsign.shape :',trdsign.shape, ' TTobs_all.shape :',TTobs_all.shape)
+
+    ################### prediction parameters ####################
+
+    nop=int(td/dt) #short operator length in samples   
+    nlag=int(tgap/dt) #prediction gap in samples
+    
+    print (' nlag :',nlag,' nop :',nop)
+        
+    ################# get shifting parameter #################
+
+    alignsamp=int(aligntime * (fs/1000))
+        
+    ################## create output arays   #############
+
+    shape = (trdsign.shape[0], trdsign.shape[1])   
+    decon_dwn_all = np.zeros((trdsign.shape[0], trdsign.shape[1]),dtype=np.float32)
+    decon_up_all = np.zeros(shape,dtype=np.float32)
+
+
+    ################# design and apply operators #################
+    
+    decon_dwnpr=np.copy(trdsign[:,])
+        
+    for k in range(0,(trdsign.shape[1])):
+        # generate the autocorrelation
+        # ac is used in the calculations - it is trimmed to the window needed
+        # ac2 is for plotting the ac of the whole trace - a qc plot only
+        ac=np.correlate(trdsign[:,k], trdsign[:,k],mode ='full')[len(trdsign)-1:len(trdsign)+nlag+nop-1]
+        ac2=np.correlate(trdsign[:,k], trdsign[:,k],mode ='full')[len(trdsign)-1:-1]
+ 
+        # stabilize the auto
+        ac[0]=ac[0]*(1.0 +stab)
+        ac=ac/ac[0] # normalize to max value of 1
+        #ac2 is for qc only
+        ac2[0]=ac2[0]*(1.0 +stab)
+        ac2=ac2/ac2[0] # normalize to max value of 1
+
+        # generate the right hand side of the normal equations
+        #b=a(nlag+1:nlag+nop);
+        b=ac[nlag:nlag+nop]
+
+        # do the levinson recursion to get prediction filter
+        prfilt=solve_toeplitz(ac[0:nop],b)
+
+        # Apply filter to input trace to get predictable part of trdsign
+        # Running conv in 'same' mode gets a moving prediction, which is wrong 
+        # Running conv in 'full' mode gets the desired result, but needs to be trimmed
+        # with a constant value to avoid moving of prediction error when op length is 
+        # changed
+        
+        trinpr_dwn = np.convolve(trdsign[:,k],prfilt, mode = 'full')
+
+        # trim off ends of output
+        trim=alignsamp # works, do not know why!!!
+        trinpr_dwn=trinpr_dwn[trim:len(trinpr_dwn)-trim]
+
+        # Delay and subtract predictable from input
+        # Result is prediction error PE 
+        # The subtraction starts at the align time + lag time 
+        x=trdsign[nlag+alignsamp:len(trdsign),k]
+        y=trinpr_dwn[0:len(trdsign)-nlag-alignsamp]
+        PE=x-y
+
+        # Insert the PE into the original trace
+        static=int(aligntime * (fs/1000))
+        decon_dwnpr=np.concatenate((trdsign[0:nlag+alignsamp,k],PE[0:len(PE)]))
+
+        ac_after=np.correlate(decon_dwnpr, decon_dwnpr,mode ='full')[len(decon_dwnpr)-1:-1]
+        ac_after=ac_after/ac_after[0] # to match the normalization of the before ac
+        
+        diff_deconpr=trdsign[0:decon_dwnpr.shape[0],k]-decon_dwnpr
+        
+        decon_dwn_all[:,k] = decon_dwnpr 
+    
+    ########## Apply a post-decon band-pass filter ####################
+    decon_dwn_filt=np.zeros(shape)    
+    decon_up_filt=np.zeros(shape)
+    
+    for k in range(0,(decon_dwn_all.shape[1])):
+        if (BPF_type=='B')or(BPF_type=='b'):
+            if k==0:
+                decon_dwn_filt[:,k] = specvsp.bandpass_filter(decon_dwn_all[:,k], lowcut, 
+                                                     highcut, fs, order, N, QCP='y')        
+                decon_up_filt[:,k] = specvsp.bandpass_filter(decon_up_all[:,k], lowcut, 
+                                                    highcut, fs, order, N, QCP='n')
+            else:
+                decon_dwn_filt[:,k] = specvsp.bandpass_filter(decon_dwn_all[:,k], lowcut, 
+                                                     highcut, fs, order, N, QCP='n')        
+                decon_up_filt[:,k] = specvsp.bandpass_filter(decon_up_all[:,k], lowcut, 
+                                                    highcut, fs, order, N, QCP='n')
+        else: 
+            if k==0:
+                # Apply the filter on the first iteration and:
+                # print a qc plot of the filter response 
+                decon_dwn_filt[:,k] = specvsp.simple_bpf(decon_dwn_all[:,k], tf1,tf2,tf3,tf4,fs,qc='y')        
+                decon_up_filt[:,k] = specvsp.simple_bpf(decon_up_all[:,k], tf1,tf2,tf3,tf4,fs,qc='n')
+            else:
+                # Just apply the filter for the rest of the loop
+                decon_dwn_filt[:,k] = specvsp.simple_bpf(decon_dwn_all[:,k], tf1,tf2,tf3,tf4,fs,qc='n')        
+                decon_up_filt[:,k] = specvsp.simple_bpf(decon_up_all[:,k], tf1,tf2,tf3,tf4,fs,qc='n')   
+        
+        ################### single trace qc plots ################################
+        if k==qc_trc:
+            
+            print ('\nb.shape :',b.shape)
+            print (' ac.shape :',ac.shape)
+            print (' prfilt.shape :',prfilt.shape)            
+            print (' decon_dwnpr.shape :',decon_dwnpr.shape)
+            print (' trinpr_dwn.shape :',trinpr_dwn.shape)
+            print (' PE.shape :',PE.shape)
+
+            if (qc_plot == 'y')or(qc_plot == 'Y'):
+
+                x_limit = int(endplot) # plotting limit for test trace
+        
+                # create a dictionary so that names and data sets are tied together
+                plot1_data = {
+                   'Windowed Downgoing':trdsign[:x_limit,k],
+                   'Auto correlation':ac[:x_limit],
+                   'RHS normal equations':b[:x_limit],
+                   'Prediction Filter (prfilt)':prfilt[:x_limit],
+                   'Predictable part of trdsign  (trinpr_dwn)':trinpr_dwn[:x_limit],                   
+                   'Prediction Error (PE)':PE[:x_limit],
+                   'Deconvolved down':decon_dwnpr[:x_limit],
+                   'Auto Corr. after':ac_after[:x_limit,],
+                   'Difference traces':diff_deconpr[:x_limit],            
+                    }
+
+                # set up variables for reading plot_data dictionary
+                # create lists of the keys and values
+                titles = list(plot1_data.keys())
+                values = list(plot1_data.values())
+
+                gs = gridspec.GridSpec(10, 1, height_ratios=[2,1,1,1,1,1,2,1,1,1], hspace = .5)
+                fig = plt.figure(figsize=(14,16))                
+        
+                for n in range(9):
+                    ax = fig.add_subplot(gs[n])
+                    ax.set_xlabel('Time(ms)')
+                    numsamp = values[n].shape[0]
+                    xtime = np.arange(0,numsamp*(1000/fs),dt)         
+                    ax.plot(xtime,values[n], c='black')
+                    ax.set_title(titles[n] + " For Trace %s gap %s ms pred length %s ms "%(qc_trc,tgap,td))
+                    ax.xaxis.grid()
+                    ax.yaxis.grid()
+                    ax.set_xlim(0,x_limit)
+            
+                    j=n       
+                plt.show()
+
+    return decon_dwn_all.T, trdsign_dwn, theaders_all_copy      

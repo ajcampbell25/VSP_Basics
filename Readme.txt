@@ -17,3 +17,4 @@ plotvsp folder has trace plotting modules
 procvsp folder has some basic seismic tool modules
 nb_images folder has graphics files for the notebook markdown sections
 data folder contains 4 VSP data sets, 3 of them are finite difference synthetics from a fictional model
+

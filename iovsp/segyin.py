@@ -1,5 +1,5 @@
 
-def readsegyio3(inputfile, file_headers,DF_ASL, SrcElev, SRD_ASL, PTS):
+def readsegyio3(inputfile, file_headers,ttbyte,ttscalar,DF_ASL, SrcElev, SRD_ASL, PTS):
     
     """ Load a segy file using segyio from Equinor
 
@@ -148,9 +148,11 @@ def readsegyio3(inputfile, file_headers,DF_ASL, SrcElev, SRD_ASL, PTS):
         sdpth = np.array(f.attributes(49)/abs(zscale))
         xrcv = np.array(f.attributes(81)/abs(scalcoord))
         yrcv = np.array(f.attributes(85)/abs(scalcoord))
-        auxtime_ms  = np.array(f.attributes(105))          #trunc. to nearest ms
-        ttime_ms  = np.array(f.attributes(107))            # trunc.to nearest ms
-        ttime  = np.array(f.attributes(197))/100     # divide if used
+    
+        lagtime_A  = np.array(f.attributes(105))          #trunc. to nearest ms
+        lagtime_B  = np.array(f.attributes(107))            # trunc.to nearest ms
+        time_byte197  = np.array(f.attributes(197))/100     # divide if used
+        ttime  = np.array(f.attributes(ttbyte))/ttscalar     # divide if used
         iline = np.array(f.attributes(189))
         
     ###### open the segy file and print binary and text headers ###########
@@ -170,10 +172,11 @@ def readsegyio3(inputfile, file_headers,DF_ASL, SrcElev, SRD_ASL, PTS):
     ############## check if times are in expected header  ######################
     # if nothing bytes 197-200 load times from lag time B
     if np.sum(ttime)==0:
-        ttime=ttime_ms
+        ttime=lagtime_B
 
     ############## check if trace number exists  ######################
-    # if nothing bytes 197-200 load times from lag time B
+    # if nothing generate number, starting at one, increment by 1, end at max 
+    # trace num 
     if np.sum(trnum)==0:
         trnum=np.arange(1,data.shape[0]+1,1 )
 
@@ -221,16 +224,17 @@ def readsegyio3(inputfile, file_headers,DF_ASL, SrcElev, SRD_ASL, PTS):
     ########### print some QC data to screen ################################
     
     print("\u0332".join('\nData Loading with segyio Stats :'))
-    print ('\n data shape :', data.shape, ' delta t :', delta_t)    
+    print ('\n data shape :', data.shape)    
     print (' data type :', data.dtype)    
     print (' trace header file shape :', thead.T.shape)    
     print (' samples :', data.shape[1],' traces :', data.shape[0], \
            ' fs samprate hz : ', samprate_hz, \
-           'samprate microseconds : ', samprate, \
+           'samprate milliseconds : ', samprate/1000, \
            '\n numsamp from headers : ', numsamp)    
-    print (' first time header value : ',ttime[0:1], \
-           '\n first lag time A value :', auxtime_ms[0:1],
-           '\n first lag time B value :', ttime_ms[0:1])
+    print (' first time header value (byte 197 divided by 100) : ',time_byte197[0:1], \
+           '\n first lag time A value (byte 105) :', lagtime_A[0:1],
+           '\n first lag time B value (byte 107) :', lagtime_B[0:1],
+           '\n time saved to header file:', ttime[0:1])
     print (' source depth from header trace 1 :', sdpth[0:1])
 
 

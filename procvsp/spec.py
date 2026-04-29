@@ -50,7 +50,7 @@ def spec_1d(data, timerange, frange, thead, trace, fs,twin, title_spec):
     trnum_single = thead_single[:,0]
     
     # generate the spectra for the chosen trace
-    X, X_db,freq = spectra(data_single,timerange, frange, thead, fs,twin)
+    X, X_db,freq = spectra(data_single,timerange, frange,  fs,twin)
 
     X=X.T
     X_db=X_db.T
@@ -85,7 +85,7 @@ def spec_1d(data, timerange, frange, thead, trace, fs,twin, title_spec):
     
     plt.show() 
     
-def spectra(idata, timerange, frange, thead, fs,twin):
+def spectra(idata, timerange, frange, fs,twin):
 
     import numpy as np
     import scipy.signal as sig
@@ -129,11 +129,12 @@ def spectra(idata, timerange, frange, thead, fs,twin):
     for k in range(0,(idata_win.shape[0])):
         
         X[k,:] = scipy.fft.fft(idata_win[k,:], n = N)      # from 0, to TT plus window
-        X_db[k,:] = 20*np.log10(np.abs(X[k,:])/(np.abs(np.max(X[0,:])))) # db=20*np.log10(S/np.max(S)
+        # normalize db by max of first trace, which is usually the shallowest and has the strongest signal, 
+        # but could be changed to max of each trace if desired
+        X_db[k,:] = 20*np.log10(np.abs(X[k,:])/(np.abs(np.max(X[0,:])))) # db=20*np.log10(S/np.max(S))
         #X_pow[k,:] = np.abs(X[k,:])**2 # power spectrum
     # Only keep positive frequencies #########    
     freq = scipy.fft.fftfreq(N, d=samprate)    # Generate plot frequency axis
-
     keep = freq>=0
     freq = freq[keep]
     
@@ -147,7 +148,7 @@ def spectra(idata, timerange, frange, thead, fs,twin):
     
     return X_posfreq, X_db_posfreq,freq
 
-def spec_FZ(idata, timerange, thead, fs,spacing, dbrange,frange, trrange,scale, title_spec, twin):
+def spec_FZ_SLB(idata, thead, fs,**kwargs):
     ''' Frequency Analysis of every trace (F-Z)    
         Uses scipy fft 
         Number of taps defined using next_fast_len, not next pow 2
@@ -156,6 +157,167 @@ def spec_FZ(idata, timerange, thead, fs,spacing, dbrange,frange, trrange,scale, 
         frange - plot frequency range
         dbrange - plot db range
         trace - trace number to extract from 2D data array
+        fs - sample rate in hertz
+        scale - scalar applied to amplitude of spectral plot
+    '''
+    import numpy as np
+    
+    import scipy.signal as sig
+    import scipy.fft    
+    import scipy.ndimage
+    
+    import matplotlib.pyplot as plt
+    import matplotlib.ticker as mtick
+    from matplotlib  import gridspec
+    
+    window = 'y' # put as arg
+    
+    db=kwargs['spec_type'] # 'y' for dB, 'n' for amplitude
+    spacing=kwargs['spacing'] # Z for traces spread by receiver depth    
+    scale=kwargs['scale'] # scale up image apmlitude plot
+    title_spec=kwargs['title_fran']
+    twin=kwargs['time_win'] # window trace prior to fft
+    timerange=kwargs['time_range'] 
+    frange=kwargs['freq_range']    
+    trrange=kwargs['trace_range'] 
+    dbrange=kwargs['db_range'] 
+    skiplabel=kwargs['header_skip'] # plot every nth header
+    rotate=kwargs['plt_rotate'] # rotate the plot 90 degrees if rotate =='y'
+    save = kwargs['savepng']
+    interp = kwargs['interp']
+    TTobs = thead[:,8]
+    rcvdepth = thead[:,2]
+    trnum = thead[:,0]
+    sdb=dbrange[1]
+    edb=dbrange[0]
+    
+    idata=idata[trrange[0]:trrange[1],:]
+    
+    trindex  = np.stack([trnum for _ in range(idata.shape[0])], axis=1)
+    rcvindex = rcvdepth[trrange[0]:trrange[1]]
+    
+    print("\u0332".join('\nFrAn image2 Parameters :'))    
+    print (' data shape :',idata.shape, ' TTobs shape :',
+           TTobs.shape)
+    print (' trindex.min():',trindex.min(), ' trindex.max():',trindex.max())
+    print ('fs :', fs,)
+    # get the spectra, one for every trace
+    X_posfreq,X_db_posfreq,freq=spectra(idata,timerange, frange, fs,twin)
+    
+    # set up the different plotting parameters for db or amplitude
+    if (db=='y')or(db=='Y'):
+        spec=X_db_posfreq.T
+        vminp = edb
+        vmaxp = sdb
+        scale=1
+        zlabel = 'dB'
+        textstr =  'Spectra min : %s'%(spec.min())  
+    else:
+        spec=abs(X_posfreq.T)
+        vminp = np.min(np.abs(spec))/scale
+        vmaxp = np.max(np.abs(spec))/scale
+        zlabel = 'Amplitude'
+        textstr =  'Spectra max : %s'%(spec.max())  
+    
+    print (' freq.min():',freq.min(), ' freq.max():',freq.max())
+    print (' trnum.shape :, trindex.shape :, Freq.shape :',trnum.shape,trindex.shape,freq.shape)
+    print (' X_db_posfreq.shape :',X_db_posfreq.shape)
+    print (' vmin :',vminp,' vmax :',vmaxp)
+
+    ############   make amplitude-magnitude plots   ################
+    
+    fig = plt.figure(figsize=(10,8))
+    
+    gs = gridspec.GridSpec(1, 1, wspace = .25)
+    
+    ax1 = plt.subplot(gs[0])
+    
+    # set up axes and image extent
+    extent = [rcvindex.min(), rcvindex.max(), freq.max(), freq.min()]
+    x=rcvindex
+    y=freq
+    
+    if (rotate=='y')or(rotate=='Y'):
+        spec=spec.T
+        extent = [ freq.min(), freq.max(),rcvindex.max(), rcvindex.min(),]
+        y=rcvindex
+        x=freq 
+
+    # interpolate spectra if requested
+    if (interp=='y')or(interp=='Y'):
+        spec = scipy.ndimage.gaussian_filter(spec, 1)
+
+    # plot the spectra as an image
+    plot1 =  ax1.imshow(spec, cmap="gist_ncar_r", interpolation='none',aspect = 'auto',
+               vmin = vminp,
+               vmax = vmaxp,
+               extent = extent)
+    # plot the contours
+    cp = ax1.contour(x,y,spec,20,colors='k',linestyles='solid',linewidths=0.4)   
+    ax1.clabel(cp, inline=True, fontsize=12)   
+    ax1.set_title('2D Amplitude Spectra from %s'%(title_spec))    
+
+    if (rotate=='n')or(rotate=='N'):     
+        ax1.set_ylim(frange[1], frange[0]) # extents must be set    
+        ax1.set_xlim(rcvindex.min(), rcvindex.max())                           
+        ax1.yaxis.grid()    
+        ax1.set_xlabel('TV Depth',fontsize = 14)    
+        ax1.set_ylabel('Frequency (hz)',fontsize = 14)    
+        #plot all the tick marks         
+        ax1.set_xticks(x[:-1:1])
+        #force tick marks and labels on top and bottom of plot        
+        ax1.tick_params(top='True',labeltop=True)
+        #rotate the tick labels 90 degrees, and skip some labels    
+        for n, label in enumerate(ax1.xaxis.get_ticklabels()):
+            label.set_rotation(270)
+            if n % skiplabel != 0:
+                label.set_visible(False)        
+
+    else:
+        ax1.set_xlim(frange[0], frange[1]) # extents must be set    
+        ax1.set_ylim(rcvindex.max(), rcvindex.min())              
+        ax1.xaxis.grid()    
+        ax1.set_ylabel('TV Depth',fontsize = 14)    
+        ax1.set_xlabel('Frequency (hz)',fontsize = 14)       
+        #plot all the tick marks
+        x=x[::-1]        
+        ax1.set_yticks(y[:-1:1])
+        #force tick marks and labels on top and bottom of plot        
+        ax1.tick_params(left='True',labelleft=True)
+        #rotate the tick labels 90 degrees, and skip some labels    
+        for n, label in enumerate(ax1.yaxis.get_ticklabels()):
+            label.set_rotation(0)
+            if n % skiplabel != 0:
+                label.set_visible(False)                 
+
+    #plot a colorbar    
+    pad = 0.03    
+    width = 0.02    
+    pos = ax1.get_position()
+    axcol = fig.add_axes([pos.xmax + pad, pos.ymin, width, \
+                          0.9*(pos.ymax-pos.ymin) ])
+    cb1 = fig.colorbar(plot1, cax = axcol, aspect = 40)#,format='%.0e')
+    cb1.set_label(label=zlabel,size=12, )
+ 
+    plt.show()
+    
+    DPI = 200    
+    if (save =='Y') or (save =='y'):        
+        fig.savefig('graphics\\spec_fz_%s.png' 
+        %(title_spec), dpi=DPI, bbox_inches = 'tight', pad_inches = .1)
+            
+ 
+    return np.abs(X_posfreq.T), X_db_posfreq.T,freq,thead[trrange[0]:trrange[1],:]   
+
+
+def spec_FZ(idata, timerange, thead, fs,spacing, dbrange,frange, trrange,scale, title_spec, twin):
+    ''' Frequency Analysis of every trace (F-Z)    
+        Uses scipy fft 
+        Number of taps defined using next_fast_len, not next pow 2
+        
+        timerange - time window to extract from traces
+        frange - plot frequency range
+        dbrange - plot db range
         fs - sample rate in hertz
         scale - scalar applied to amplitude of spectral plot
     '''
@@ -175,10 +337,15 @@ def spec_FZ(idata, timerange, thead, fs,spacing, dbrange,frange, trrange,scale, 
     trnum = thead[:,0]
     sdb=dbrange[1]
     edb=dbrange[0]
-    
+    print (' idata.shape :',idata.shape)
+    print (' trrange :', trrange)
+    print (' trnum.min(), trnum.max() :',trnum.min(), trnum.max())
+    print (' rcvdepth.min(), rcvdepth.max() :',rcvdepth.min(), rcvdepth.max())
+    trnum=trnum[trrange[0]:trrange[1]]
     idata=idata[trrange[0]:trrange[1],:]
     
     trindex  = np.stack([trnum for _ in range(idata.shape[0])], axis=1)
+    rcvindex = rcvdepth[trrange[0]:trrange[1]]
     
     print("\u0332".join('\nFrAn image2 Parameters :'))    
     print (' data shape :',idata.shape, ' TTobs shape :',
@@ -186,28 +353,29 @@ def spec_FZ(idata, timerange, thead, fs,spacing, dbrange,frange, trrange,scale, 
     print (' trindex.min():',trindex.min(), ' trindex.max():',trindex.max())
     print ('fs :', fs,)
     
-    X_posfreq,X_db_posfreq,freq=spectra(idata,timerange, frange, thead, fs,twin)
+    X_posfreq,X_db_posfreq,freq=spectra(idata,timerange, frange, fs,twin)
 
     ############   make amplitude-magnitude plots   ################
     
     fig = plt.figure(figsize=(12,14))
     
-    gs = gridspec.GridSpec(2, 1, height_ratios=[1,1], wspace = .25)
+    gs = gridspec.GridSpec(3, 1, height_ratios=[1,1,.1], wspace = .25)
     
     ax1 = plt.subplot(gs[0])
     ax2 = plt.subplot(gs[1])
+    ax3 = plt.subplot(gs[2])
 
     plot1 =  ax1.imshow(np.abs(X_posfreq.T), cmap="gist_ncar_r", interpolation='none',aspect = 'auto',
                vmin = np.min(np.abs(X_posfreq))/scale,
                vmax = np.max(np.abs(X_posfreq))/scale,
-               extent = [trindex.min(), trindex.max(), freq.max(), freq.min()])
+               extent = [rcvindex.min(), rcvindex.max(), freq.max(), freq.min()])
     
     ax1.set_ylim(frange[1], frange[0]) # extents must be set    
-    ax1.set_xlim(trrange[0], trrange[1])
-                           
+#    ax1.set_xlim(trrange[0], trrange[1])
+    ax1.set_xlim(rcvindex.min(), rcvindex.max())                                                      
     ax1.yaxis.grid()    
-    ax1.set_xlabel('trace')    
-    ax1.set_ylabel('frequency (hz)')    
+    ax1.set_xlabel('Receiver Depth')    
+    ax1.set_ylabel('Frequency (hz)')    
     ax1.set_title('Combined Amplitude Spectra from %s'%(title_spec))    
     textstr =  'Spectra max : %s'%(X_posfreq.max())    
     ax1.text(0.05, 0.05, textstr, transform=ax1.transAxes, fontsize=12,
@@ -226,13 +394,13 @@ def spec_FZ(idata, timerange, thead, fs,spacing, dbrange,frange, trrange,scale, 
     plot2 = ax2.imshow(X_db_posfreq.T, cmap="gist_ncar_r", interpolation='none',aspect = 'auto',
                vmin = edb,
                vmax = sdb,
-               extent = [trindex.min(), trindex.max(), freq.max(), freq.min()])
+               extent = [rcvindex.min(), rcvindex.max(), freq.max(), freq.min()])
 
     ax2.set_ylim(frange[1], frange[0]) # extents must be set    
-    ax2.set_xlim(trrange[0], trrange[1])                           
+    ax2.set_xlim(rcvindex.min(), rcvindex.max())                                                      
     ax2.yaxis.grid()    
-    ax2.set_xlabel('trace')    
-    ax2.set_ylabel('frequency (hz)')    
+    ax2.set_xlabel('Receiver Depth')    
+    ax2.set_ylabel('Frequency (hz)')    
     ax2.set_title('Combined Amplitude Spectra (dB) from %s'%(title_spec))    
     textstr =  'Spectra min : %s'%(X_db_posfreq.min())    
     ax2.text(0.05, 0.05, textstr, transform=ax2.transAxes, fontsize=12,
@@ -245,10 +413,35 @@ def spec_FZ(idata, timerange, thead, fs,spacing, dbrange,frange, trrange,scale, 
     axcol2 = fig.add_axes([pos2.xmax + pad, pos2.ymin, width, \
                           0.9*(pos2.ymax-pos2.ymin) ])
     cb2 = fig.colorbar(plot2, label = 'dB', cax = axcol2, aspect = 40,format='%.1f')
-           
+    
+    # add a separate trace number track
+    deci= int((trindex.max() - trindex.min())/20)
+    trnum=np.int64(trnum)
+    ytracnum=np.copy(trnum)*0
+    
+ 
+    ax3.plot(trnum[::deci],ytracnum[::deci],linestyle='None')
+    for z,y in zip(trnum[::deci],ytracnum[::deci]):
+        trlabel=z
+        ax3.annotate(trlabel, (z,y))#, textcoords='data')
+    ax3.set_xlim(trnum.min(), trnum.max())
+    # turn off bounding box
+    ax3.spines['top'].set_visible(False)
+    ax3.spines['right'].set_visible(False)
+    ax3.spines['bottom'].set_visible(False)
+    ax3.spines['left'].set_visible(False)
+    #ax1.axes.get_xaxis().set_visible(False)
+    ax3.axes.get_yaxis().set_visible(False)
+    ax3.set_xticklabels([])
+    ax3.set_yticklabels([])
+    ax3.set_xticks([])
+    ax3.set_yticks([])
+
+    ax3.set_xlabel('Trace')
+    
     plt.show()
  
-    return np.abs(X_posfreq.T), X_db_posfreq.T,freq   
+    return np.abs(X_posfreq.T), X_db_posfreq.T,freq,thead[trrange[0]:trrange[1],:]   
 
 def bandpass_filter(data, lowcut, highcut, fs, order, N, QCP):
     '''
@@ -463,4 +656,131 @@ def simple_bpf(VSPdata, tf1,tf2,tf3,tf4, fs, qc ):
 
     return BPFdata.T    
     
+def FrAn_VSProwess(data, timerange, frange, thead, trace, fs, title_spec):
+    ''' Frequency Analysis of section of trace 
+        Shift the data prior to fft so direct arrival is center of input to fft
+        Apply a window to reduce edge effects
+        Use next power of 2 to get number of taps ( scipy does not require this)
+        Finally run fft
+        
+        thead - requires a valid travel time     
+        timerange - desired analysis window 
+        twin - apply analyis window 'y' or use whole trace 'n' -not used
+        trace - trace number to extract from 2D data array
+        fs - sample rate in hertz
+        scale - scales amplitude of trace plot, >1 makes plot hotter
+    Example:    
     
+    trace = 6
+    time_win = 'n' # window trace prior to fft
+    time_range = [0, 2000]
+    freq_range = [0, 150]
+    
+    title_fran = 'Raw Z'
+    FrAn_VSProwess(data_edit, time_range,freq_range, theader_edit, trace, fs, 
+         title_fran)
+    '''
+
+    import math
+    import scipy 
+    from math import ceil
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from matplotlib  import gridspec
+    import procvsp.utils as utilvsp
+            
+    dt =1/fs *1000             # sample rate in ms
+    samprate = 1/fs            #sample rate in seconds
+    
+    # extract analysis trace
+    data_single, thead_single = utilvsp.chosetrace(data, thead, trace)
+    data_single = data_single.T
+    # get useful headers
+    TTobs_single = thead_single[:,8]
+    zrcv_select = thead_single[:,2]
+    trnum_single = thead_single[:,0]
+        
+    print("\u0332".join('\nFrAn2 Parameters :'))   
+    print ('fs :', fs,)
+    
+    ###################### section the trace  #######################
+    
+    data_strim = data_single[int(timerange[0]*(fs/1000)):int(timerange[1]*(fs/1000))]
+    
+    ############# optimize number of samples for transform  ############
+
+    win = nextpow2(int((timerange[1]-timerange[0])*(fs/1000)))  # get next power of 2 for window
+    
+    start = (int(ceil(TTobs_single) / dt))  # include data from start - 
+                                            # direct arrival - plus a window 
+    stop = int(start + win/2)               # Divide window by 2 for VSProwess  
+    data_trim = data_single[0:stop]       # Apply window to whole trace so to
+                                            # avoid tapering direct arrival
+    N = data_trim.size
+   
+    ######### shift to put direct arrival in center of a window ##########
+    
+    tshift = thead_single[:,8] * (fs/1000) # get index number for travel time
+    atime = int(win/2)                     # get index number to alignment at window center            
+    xshift = tshift - atime                # shift to move direct arrival to center of window
+    xshift = xshift.astype(int) * -1 
+    arr=data_trim
+    
+    # apply shift to sectioned data
+    if (xshift>0):
+        arr = np.pad(data_trim, ((0,int(xshift)),(0,0)), 'constant')
+    data_shft = np.zeros(shape = (arr.shape[0], arr.shape[1]))    
+    data_shft = np.roll(arr,xshift) # carefulwith input array shape
+
+    if xshift > 0:
+        data_shft[xshift] = 0            # [1, 4000] need row number 0
+        
+    ####### window the trace to prevent edge effect in fft  #############
+
+#    w = np.blackman(N) # design a window 
+#    w = np.kaiser(N,14) # design a window 
+#    w = np.hamming(N) # design a window 
+    w = np.hanning(data_shft.shape[0]) # design a window
+#    w = np.bartlett(N) # design a window
+    
+    data_wind = data_shft[:,0]*w        # Multiply trace by window
+    print (' start :', start, ' stop :', stop, ' data windowed shape :', 
+           data_wind.shape,' N :', N, ' w shape :', w.shape)
+
+    ############################ do the fft  #############################
+    
+    X = scipy.fft.fft(data_wind)                      # number of taps equals input samples
+    X_db = 20*np.log10(np.abs(X)/np.max(np.abs(X)))   # db=20*np.log10(S/np.max(S))    
+    freq = scipy.fft.fftfreq(X.shape[0], d=samprate)  # Generate plot frequency axis 
+
+    # Only keep positive frequencies    
+    keep = freq>=0    
+    X = X[keep]    
+    X_db = X_db[keep]    
+    freq = freq[keep]
+
+    ############   make single trace plots   ################
+    
+    plt.figure(figsize=(15,15))    
+    ax1 = plt.subplot(211)
+    
+    ax1.plot(freq, np.absolute(X), c = 'red')  # using fftfreq to get x axis    
+    ax1.set_title('Amplitude Spectrum of %s at Depth %s'
+                  %(title_spec, zrcv_select))    
+    ax1.set_xlabel('Frequency hz')    
+    ax1.set_xlim(frange[0], frange[1]) # extents must be set   
+    #ax1.yaxis.set_major_formatter(mtick.FormatStrFormatter('%.2e'))
+    ax1.xaxis.grid()    
+    ax1.yaxis.grid()
+
+    ax2 = plt.subplot(212)
+    
+    ax2.plot(freq,X_db, c='blue') #using number of samples and sample rate to get x axis    
+    ax2.set_title('Amplitude Spectrum in db of %s at Depth %s'
+                  %(title_spec, zrcv_select))    
+    ax2.set_xlabel('Frequency hz')    
+    ax2.set_xlim(frange[0], frange[1]) # extents must be set   
+    ax2.xaxis.grid()    
+    ax2.yaxis.grid()
+
+    plt.show()     

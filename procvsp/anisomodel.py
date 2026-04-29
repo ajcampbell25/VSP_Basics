@@ -128,7 +128,7 @@ def aniso_phase(Vpz, Vsz, epsilon, delta, save):
     gs = gridspec.GridSpec(1, 2, width_ratios=[1,1], wspace = .25)
     
     ax1 = plt.subplot(gs[0])    
-     
+    ax1.axes.set_aspect('equal')     
     ax1.plot(Slowxp_ani, Slowzp_ani, label = 'Anisotropic')      
     ax1.plot(Slowxp_iso, Slowzp_iso, label = 'Isotropic',linestyle='--')      
     #ax1.set_xlim(0, f2*2)       # subjective choice
@@ -142,7 +142,8 @@ def aniso_phase(Vpz, Vsz, epsilon, delta, save):
     ax1.text(.5,.1,"Epsilon = %s, Delta = %s"%(epsilon,delta),
                   horizontalalignment='center', verticalalignment='center', transform=ax1.transAxes)
 
-    ax2 = plt.subplot(gs[1])    
+    ax2 = plt.subplot(gs[1])
+    ax2.axes.set_aspect('equal')    
     ax2.plot(Slowxs_ani, Slowzs_ani,label = 'Anisotropic')      
     ax2.plot(Slowxs_iso, Slowzs_iso,label = 'Isotropic',linestyle='--')      
     #ax2.set_xlim(0, f2*4)      # subjective choice
@@ -321,7 +322,8 @@ def aniso_phase_calc(wvsptzoff,tu,Vpz,Vsz,epsilon,delta, save):
     fig = plt.figure(figsize=(8,5))    
     gs = gridspec.GridSpec(1, 1,  wspace = .25)
     
-    ax1 = plt.subplot(gs[0])    
+    ax1 = plt.subplot(gs[0])
+    ax1.axes.set_aspect('equal')    
     ax1.scatter(Slowx, Slowz, marker = "+",s=50,color = 'black',label = 'Measured Phase-Slowness')      
     ax1.plot(Sloxpani, Slozpani, label = 'Modeled Anisotropic Phase-Slowness')      
     ax1.plot(Sloxpiso, Slozpiso, label = 'Modeled Isotropic Phase-Slowness',linestyle='--')      
@@ -358,10 +360,12 @@ def group_vel(Vpz,Vsz, epsilon, delta,dep):
     # get P and Sv phase velocity    
     Vp, Vs, theta= phase_vel(Vpz, Vsz, epsilon, delta)
      
-    Tp=2*(dep/Vpz) # two way time (P) to a fixed depth
+    #Tp=2*(dep/Vpz) # two way time (P) to a fixed depth
+    Tp=(dep/Vpz) # time (P) to a fixed depth
     
      # create numpy arrays initialized to zero values
     term0,term1,term2,term3,term4,Vp_grp = [np.zeros(shape = theta.shape) for j in range(6)]
+#    term3_a,term3_b,term3_c = [np.zeros(shape = theta.shape) for j in range(3)]
     term3_s,term4_s,Vs_grp = [np.zeros(shape = theta.shape) for i in range(3)]
     Vp_grp_angr, Vp_grp_angd, Vs_grp_angr, Vs_grp_angd = [np.zeros(shape = theta.shape) for i in range(4)]
     Xp_grp, Zp_grp,Xs_grp, Zs_grp = [np.zeros(shape = theta.shape) for i in range(4)]
@@ -374,13 +378,19 @@ def group_vel(Vpz,Vsz, epsilon, delta,dep):
         term2[i,] = (Vpz**2-Vsz**2)*(Vpn**2-Vpx**2)
         term3[i,] = term0[i,]+1/(sqrt(term1[i,]**2+term2[i,]*(sin(2*theta[i,])**2)))*\
         (term0[i,]*(Vpx**2-Vpz**2)*sin(2*theta[i,])+term0[i,]*sin(4*theta[i,]))    
-       
+#        term3_a[i,] = 1/(sqrt(term1[i,]**2+term2[i,]*(sin(2*theta[i,])**2)))
+#        term3_b[i,]=term0[i,]*(Vpx**2-Vpz**2)*sin(2*theta[i,])+term0[i,]*sin(4*theta[i,])
+#        term3_c[i,]=term0[i,]+(term3_a[i,]*term3_b[i,])
+        if theta[i,]<0:
+#            term3_c[i,]=term0[i,]+(term3_a[i,]*term3_b[i,])*-1
+            term3[i,] = term0[i,]+1/(sqrt(term1[i,]**2+term2[i,]*(sin(2*theta[i,])**2)))*\
+            (term0[i,]*(Vpx**2-Vpz**2)*sin(2*theta[i,])+term0[i,]*sin(4*theta[i,]))*-1                
         term4[i,] = (1/(4*Vp[i,]))*term3[i,]
         Vp_grp[i,] = sqrt(Vp[i,]**2+term4[i,]**2)
 
         term3_s[i,] = term0[i,]-1/(sqrt(term1[i,]**2+term2[i,]*(sin(2*theta[i,])**2)))*\
         (term1[i,]*(Vpx**2-Vpz**2)*sin(2*theta[i,])+term2[i,]*sin(4*theta[i,]))    
-        
+#        print (' term  3a,3b, 3c :', term3[i,],term3_a[i,],term3_b[i,],term3_c[i,])
         term4_s[i,] = (1/(4*Vs[i,]))*term3_s[i,]    
         Vs_grp[i,] = sqrt(Vs[i,]**2+term4_s[i,]**2)
         
@@ -459,7 +469,7 @@ def wavefronts(Vpz, Vsz, epsilon, delta,dep,save):
 
     # Create another legend for the isotropic curves.
     leg2 = plt.legend(handles=[line3,line4], loc='lower left')
-
+    ax1.axes.set_aspect('equal')
     ax1.set_ylim(max(Zp_grp), min(Zp_grp))  # flip y axis so depth increases from top to bottom
     ax1.set_xlabel('Horizontal Offset')    
     ax1.set_ylabel('Vertical Depth')    

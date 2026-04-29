@@ -113,18 +113,126 @@ def medfilt_along (VSP, k):
         out[row,] = np.median(y, axis = 1)
 
     return out
+
+def normalize(Seismic, thead,fs,**kwargs):
+    ''' Normalize traces based on max amplitude in a window.The window can be defined 
+    relative to travel time or relative to zero time.
+    1. Find the max amplitude in window.
+    2. Divide traces by the max amplitude
+
+    Returns : normalized traces, max amplitude in window.
+
+    Inputs:   
+    Seismic : VSP traces
+    thead : ascii file of headers - must have depth in column 3, TT in column 9
+    cwin : start and stop of window, negative for a backup time relative to TT
+    useTT : make window relative to TT instead of time zero.
+
+    Useage:
+    norm_params={'relative_to_TT':'y', # window relative to TT, if no use 'n'
+             'norm_win':[-20,200],# relative to tt -ve is subtracted
+             }  
+    normed_edit, nrm_factor = normalize(raw_wvsp_7a, trhead_raw,fs,**norm_params)
     
-def normalize (Seismic, norm, thead, scal):
+    '''
+    
+    import numpy as np
+    import matplotlib.pyplot as plt
+
+    cwin=kwargs['norm_win'] # mute window in time
+    useTT = kwargs['relative_to_TT']
+    
+    # get receiver depths for QC plots
+    rdepth = thead[:,2]
+    TT = thead[:,8]*fs/1000
+    
+    # Set TT to 0 to avoid using TT when using zero reference 
+    if useTT=='n':
+        TT=TT*0
+   
+    # number of samples in mute window
+    cwinsamps= int((cwin[1]+cwin[0]) *fs/1000)
+    # sample numbers to start of mute
+    premtime = (TT+(cwin[0]*fs/1000))
+    premtime[premtime<0] = 0
+    # sample numbers to end of mute
+    mtime = (TT)+cwinsamps
+    mtime[mtime>Seismic.shape[1]] = Seismic.shape[1]
+
+        
+    # convert start and end mute times to integer sample numbers 
+    premtime = premtime.astype(int)
+    mtime = mtime.astype(int)
+     
+    # create empty array for output    
+    datascaled = np.zeros(shape = (Seismic.shape[0], Seismic.shape[1]), dtype=np.float32)
+    # create arrays of ones for window amplitudes to avoid divide by 0
+    amp_pre=np.ones((Seismic.shape[0]))
+    amp_post=np.zeros((Seismic.shape[0]))
+   
+    # if window does use TT
+    if (useTT=='y')or(useTT=='Y'):
+        for k in range(0,Seismic.shape[0]):
+            # for each trace (k), calculate max amplitude between the time headers   
+            #print ('nrm_factor :',np.abs(Seismic[k,premtime[k]:mtime[k]]))
+            amp_pre[k] = np.nanmax(np.abs(Seismic[k,premtime[k]:mtime[k]]), axis=0) 
+        # for each trace (k), divide seismic traces by max amplitude of each trace
+            datascaled[k,:] = (Seismic[k,:] / amp_pre[k])
+            amp_post[k] = np.nanmax(np.abs(datascaled[k,premtime[k]:mtime[k]]), axis = 0)
+    
+    # window does not use TT
+    if (useTT=='n')or(useTT=='N'):
+        #premtime[premtime<0] = 0
+        #mtime[mtime>Seismic.shape[1]] = Seismic.shape[1]
+        #print (' premtime :', premtime,' pmtime :', mtime)
+        ampmax = np.nanmax(np.abs(Seismic[:,premtime[0]:mtime[0]]), axis=1) 
+        datascaled = (Seismic / ampmax[:, np.newaxis])        
+        
+        amp_pre=np.nanmax(np.abs(Seismic), axis=1) # for before-after plot
+        amp_post=np.nanmax(np.abs(datascaled), axis = 1) # for before-after plot
+        
+    plt.figure(figsize=(14,5))    
+    
+    ax2 = plt.subplot(121)
+    ax3 = ax2.twinx()
+
+    ax2.plot(rdepth, amp_pre, c = 'red', label='Pre Norm')         
+    ax2.legend(loc='lower left',borderaxespad=0)#, fontsize = 7
+    ax2.set_title('Maximum Amplitudes')   
+    ax2.set_xlabel('TVD Depth')    
+    ax2.set_ylabel('Abs(Amplitude)')    
+    ax2.xaxis.grid()    
+    ax2.yaxis.grid()
+
+    ax3.plot(rdepth, amp_post, c = 'blue', label='Post Norm')  
+    ax3.legend(loc='best',borderaxespad=0)#, fontsize = 7 
+    ax3.yaxis.set_label_position('right')
+
+    ax4 = plt.subplot(122)
+    ax4.scatter(rdepth, TT, s=1,c = 'red',label = 'TT')  # using fftfreq to get x axis
+    ax4.scatter(rdepth, premtime,s=1, c = 'green', label='window start')  # using fftfreq to get x axis    
+    ax4.scatter(rdepth, mtime,s=1, c = 'blue', label='window end')  # using fftfreq to get x axis    
+    ax4.set_title('Windows')   
+    ax4.set_ylabel('Travel Time (ms)')   
+    ax4.set_xlabel('TVD Depth')
+    ax4.set_ylim(mtime.max()+ cwinsamps,TT.min()-cwinsamps)
+    if useTT=='n':
+        ax4.set_ylim(Seismic.shape[1]*fs/1000,0)    
+    ax4.xaxis.grid()    
+    ax4.yaxis.grid()
+    
+    plt.show()
+
+    return datascaled, amp_pre
+
+    
+def normalize_obsolete (Seismic, norm, thead, scal):
     """
-    data normalization
-    Frobenius norm is the default, L1 norm optional using data.sum
-    row_sums = data.sum(axis=1)
+    data normalization, divide trace by maximum amplitude of whole trace
 
     This method takes the whole trace, zeros before TT included so result 
     can be unexpected
     
-    I need to create a method for normalizing in a window then apply 
-    that norm factor to the whole trace
     stackoverflow.com/questions/8904694/how-to-normalize-a-2-dimensional-numpy-array-in-python-less-verbose
     """
     import numpy as np
@@ -138,10 +246,6 @@ def normalize (Seismic, norm, thead, scal):
     #data1 = Seismic
     print (' norm :',norm) 
     if (norm == 'Y') or (norm =='y'):        
-        #row_sums = np.linalg.norm(data1, axis=1)        
-        #print (' row_sums shape', row_sums.shape)        
-        #data2 = (data1 / row_sums[:, np.newaxis])        
-        #datascaled = data2 * scal
 
         ampmax = np.nanmax(np.abs(Seismic), axis=1) 
         data2 = (Seismic / ampmax[:, np.newaxis])        
@@ -152,7 +256,7 @@ def normalize (Seismic, norm, thead, scal):
             
         plt.figure(figsize=(14,5))    
         ax1 = plt.subplot(121)
-        ax1.plot(rdepth, ampmax, c = 'red')  # using fftfreq to get x axis    
+        ax1.plot(rdepth, amp_pre, c = 'red')  # using fftfreq to get x axis    
         ax1.set_title('Normalization Factors')   
         ax1.set_xlabel('TVD Depth')    
         ax1.xaxis.grid()    
@@ -180,11 +284,14 @@ def normalize (Seismic, norm, thead, scal):
         datascaled = Seismic * scal
 
     return datascaled
-    
+
+
 def normalize2(a, *, datarange = None):
     # not tested
     # from https://community.opengroup.org/osdu/platform/domain-data-mgmt-services
     # /seismic/open-zgy/-/blob/fff61f457d7d3ed90f239cafc5dc74a2d64400f8/python/openzgy/tools/viewzgy.py
+    
+    import numpy as np
     
     a = a.astype(np.float32)
     dead = np.isnan(a)
@@ -204,26 +311,39 @@ def normalize2(a, *, datarange = None):
     a = (a * 255).astype(np.uint8)
     return a, dead
 
-def cstack(upvsp, thead, fs, cwin, ctrnum, repeat):
-    # Generate the a windowed data set and it's stack (corridor) 
-    # A  tail mute is first applied at TWT plus cwin to get the corridor of data
-    # The bottom ctrnum traces are left untouched
-    # Headers must include twt in column 9
+def cstack(upvsp, thead, fs, **kwargs):
+    ''' Mute out a window of data set stack it (corridor stack) 
+    cwin : A  tail mute is first applied at TWT plus cwin to get the corridor of data
+    ctrnum : The bottom ctrnum traces are left untouched
+    repeat : repeat the stack traces n times for plotting 
     
+    **** Headers must include twt in 2nd to last column 
+    '''
     import numpy as np
     import warnings
-
-    cwinsamps= int(cwin *1000/fs)
-    premtime = thead[:,8]*2*1000/fs
-    mtime = (thead[:,8]*2*1000/fs)+cwinsamps
     
+    print("\u0332".join('\nCstack Stats :'))
+    print (' input VSP shape :',upvsp.shape)
+    
+    cwin=kwargs['corrwin'] # cstack window in time
+    ctrnum=kwargs['keeptrcs']
+    repeat=kwargs['repeat']
+
+    # number of samples in corridor stack window
+    cwinsamps= int(cwin *fs/1000)
+    # sample numbers to start of corridor stack in 2WT
+    premtime = thead[:,-2]*fs/1000
+    # sample numbers to end of corridor stack in 2WT
+    mtime = (thead[:,-2]*fs/1000)+cwinsamps
+        
     # convert TWT and TWT + window to integer sample numbers 
     premtime = premtime.astype(int)
     mtime = mtime.astype(int)
-    
-#    corrmute = np.zeros(shape = (upvsp.shape[0], upvsp.shape[1]))#,dtype=np.float32) 
+
+    # make an array full of nans
+    # this avoids accumulating zeros in the median stack    
     corrmute = np.empty(shape = (upvsp.shape[0], upvsp.shape[1]))#,dtype=np.float32)
-    corrmute = corrmute*np.nan
+    corrmute[:,:] = np.nan
     
     emuted = corrmute.shape[0]-ctrnum
     snomute = corrmute.shape[0]-ctrnum
@@ -238,6 +358,8 @@ def cstack(upvsp, thead, fs, cwin, ctrnum, repeat):
     for k in range(snomute,enomute):
         # copy data array from bottom traces   
         corrmute[k,premtime[k]:-1] = upvsp[k,premtime[k]:-1]
+        
+    print (' corrmute.shape :',corrmute.shape)
 
     # there will always be nans above the shallowest receiver, calculating the mean or median
     # of all nan samples will generate a warning which we can suppress
@@ -248,7 +370,8 @@ def cstack(upvsp, thead, fs, cwin, ctrnum, repeat):
 #        corrstk= np.nanmean(corrmute, axis=0).reshape(-1,1)
 #        corrstk= np.sum(corrmute, axis=0).reshape(-1,1)
     
-    print (' np.nanmax(corrmute) :', np.nanmax(corrmute), ' np.nanmax(corrstk) :', np.nanmax(corrstk))
+    print (' np.nanmax(np.abs(corrmute)) :', np.nanmax(np.abs(corrmute)), 
+           ' np.nanmax(np.abs(corrstk)) :', np.nanmax(np.abs(corrstk)))
 
     corrstk = np.repeat(corrstk,repeat,axis=1)
 
@@ -286,8 +409,9 @@ def attributes(data, fs):
     
     data_nrm = data//np.max(data)
     
-    # generate a time axis vector    
-    t = np.arange(0,data.shape[1], fs/1000).reshape(-1)
+    # generate a time axis vector
+    dt=1000/fs    
+    t = np.arange(0,data.shape[1], dt).reshape(-1)
     tim1, tim2 = t.min(),t.max()
     
     analytic_signal = hilbert(data)
@@ -297,7 +421,7 @@ def attributes(data, fs):
     inst_frequency = (np.diff(inst_phase_unwrap) / (2.0*np.pi) * fs)
     
     print ("\u0332".join('\nAttribute Parameters :'))
-    print (' fs :', fs, '\n',
+    print (' fs :', fs, '\n', ' dt :',dt,
            ' max trace amplitude : ', np.max(data),'\n',
            ' max amplitude envelope : ', np.max(amp_env),'\n' ,
            ' max inst frequency : ', np.max(inst_frequency),'\n', 

@@ -35,7 +35,7 @@ def write_segyio(data, tracehead,fs, name):
     ################# read trace headers ##########################
 
     FFID = tracehead[:,14].astype(int)
-    SRC = tracehead[:,15].astype(int)
+    SRC = tracehead[:,13].astype(int)
     MD = (tracehead[:,1]*scaldep).astype(int)
     TVD = (tracehead[:,2]*scaldep).astype(int)
     RcvX = (tracehead[:,3]*scalcoord).astype(int)
