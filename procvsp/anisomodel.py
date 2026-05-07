@@ -55,12 +55,12 @@ def phase_vel(Vpz,Vsz, epsilon, delta):
     # calculate phase velocities as function of wavefront propagation angle
     for i in range(0,theta.shape[0]):
         phase_velp[i,] = sqrt(.5)*sqrt((Vpx**2*sin(theta[i,])**2+Vpz**2*cos(theta[i,])**2 +Vsz**2)+ 
-        sqrt((( Vpx**2-Vsz**2)*sin(theta[i,])**2 +(Vpz**2-Vsz**2)*cos(theta[i,])**2)**2 +
-        (Vpz**2-Vsz**2)*(Vpn**2-Vpx**2)*(sin(2*theta[i,]))**2))
+        sqrt((( Vpx**2-Vsz**2)*sin(theta[i,])**2 - (Vpz**2-Vsz**2)*cos(theta[i,])**2)**2 +
+        (Vpz**2-Vsz**2)*(Vpn**2-Vsz**2)*(sin(2*theta[i,]))**2))
 
         phase_vels[i,] = sqrt(.5)*sqrt((Vpx**2*sin(theta[i,])**2+Vpz**2*cos(theta[i,])**2 +Vsz**2)-
-        sqrt((( Vpx**2-Vsz**2)*sin(theta[i,])**2 +(Vpz**2-Vsz**2)*cos(theta[i,])**2)**2 +
-        (Vpz**2-Vsz**2)*(Vpn**2-Vpx**2)*(sin(2*theta[i,]))**2))
+        sqrt((( Vpx**2-Vsz**2)*sin(theta[i,])**2 - (Vpz**2-Vsz**2)*cos(theta[i,])**2)**2 +
+        (Vpz**2-Vsz**2)*(Vpn**2-Vsz**2)*(sin(2*theta[i,]))**2))
         
     return phase_velp, phase_vels, theta
 
@@ -374,8 +374,8 @@ def group_vel(Vpz,Vsz, epsilon, delta,dep):
     # group velocity can be calculated from phase velocity and it's components
     for i in range(0,theta.shape[0]):
         term0[i,] = (Vpx**2-Vpz**2)*sin(2*theta[i,])
-        term1[i,] = (Vpx**2-Vs[1,]**2)*sin(theta[i,])**2+(Vpz**2-Vsz**2)*cos(theta[i,])**2        
-        term2[i,] = (Vpz**2-Vsz**2)*(Vpn**2-Vpx**2)
+        term1[i,] = (Vpx**2-Vsz**2)*sin(theta[i,])**2 - (Vpz**2-Vsz**2)*cos(theta[i,])**2        
+        term2[i,] = (Vpz**2-Vsz**2)*(Vpn**2-Vsz**2)
         term3[i,] = term0[i,]+1/(sqrt(term1[i,]**2+term2[i,]*(sin(2*theta[i,])**2)))*\
         (term0[i,]*(Vpx**2-Vpz**2)*sin(2*theta[i,])+term0[i,]*sin(4*theta[i,]))    
 #        term3_a[i,] = 1/(sqrt(term1[i,]**2+term2[i,]*(sin(2*theta[i,])**2)))

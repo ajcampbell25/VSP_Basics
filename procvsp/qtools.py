@@ -537,7 +537,7 @@ def q_centroid(thead_ref,thead_two,aspec, freq,fs,**kwargs):
     sigtest=np.zeros(shape=Qtest.shape[0])
 
     if(fd1>fd2): 
-        for k in range(0,len(Qtest)-1):
+        for k in range(0,len(Qtest)):  # Removed the -1
             #print (' k :',k,)
             #print (' A1.shape :',A1.shape,' freq.shape : ',freq.shape,' Qtest.shape :',Qtest.shape)
             # test spectrum for different q values            
