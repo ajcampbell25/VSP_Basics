@@ -138,16 +138,22 @@ def readsegyio3(inputfile, file_headers,ttbyte,ttscalar,DF_ASL, SrcElev, SRD_ASL
         src = np.array(f.attributes(17))
         nsamp = np.array(f.attributes(115))
         srate = np.array(f.attributes(117))
+        def apply_scalar(arr, scalar):
+            # If 0, assume 1. If negative, divide. If positive, multiply.
+            scalar = np.where(scalar == 0, 1, scalar)
+            return np.where(scalar < 0, arr / np.abs(scalar), arr * scalar)
+
         zscale = np.array(f.attributes(69))
-        mdpth = np.array(f.attributes(37)/abs(zscale))
-        tvddpth = np.array(f.attributes(41)/abs(zscale))
-        srd = np.array(f.attributes(53)/abs(zscale))
         scalcoord = np.array(f.attributes(71))
-        xsrc = np.array(f.attributes(73)/abs(scalcoord))
-        ysrc = np.array(f.attributes(77)/abs(scalcoord))
-        sdpth = np.array(f.attributes(49)/abs(zscale))
-        xrcv = np.array(f.attributes(81)/abs(scalcoord))
-        yrcv = np.array(f.attributes(85)/abs(scalcoord))
+
+        mdpth = apply_scalar(np.array(f.attributes(37)), zscale)
+        tvddpth = apply_scalar(np.array(f.attributes(41)), zscale)
+        srd = apply_scalar(np.array(f.attributes(53)), zscale)
+        xsrc = apply_scalar(np.array(f.attributes(73)), scalcoord)
+        ysrc = apply_scalar(np.array(f.attributes(77)), scalcoord)
+        sdpth = apply_scalar(np.array(f.attributes(49)), zscale)
+        xrcv = apply_scalar(np.array(f.attributes(81)), scalcoord)
+        yrcv = apply_scalar(np.array(f.attributes(85)), scalcoord)
     
         lagtime_A  = np.array(f.attributes(105))          #trunc. to nearest ms
         lagtime_B  = np.array(f.attributes(107))            # trunc.to nearest ms
@@ -306,16 +312,20 @@ def readsegy(inputfile, file_headers,DF_ASL, SrcElev, SRD_ASL, PTS):
         src[n] = tr.header.energy_source_point_number
         nsamp[n] = tr.header.number_of_samples_in_this_trace
         srate[n] = tr.header.sample_interval_in_ms_for_this_trace
+        def apply_scalar_single(value, scalar):
+            if scalar == 0: return value
+            return value / abs(scalar) if scalar < 0 else value * scalar
+
         zscale[n] = tr.header.scalar_to_be_applied_to_all_elevations_and_depths
-        mdpth[n] = tr.header.distance_from_center_of_the_source_point_to_the_center_of_the_receiver_group/abs(zscale[n])
-        tvddpth[n] = tr.header.receiver_group_elevation/abs(zscale[n])
-        srd[n] = tr.header.datum_elevation_at_receiver_group/abs(zscale[n])
+        mdpth[n] = apply_scalar_single(tr.header.distance_from_center_of_the_source_point_to_the_center_of_the_receiver_group, zscale[n])
+        tvddpth[n] = apply_scalar_single(tr.header.receiver_group_elevation, zscale[n])
+        srd[n] = apply_scalar_single(tr.header.datum_elevation_at_receiver_group, zscale[n])
         scalcoord[n] = tr.header.scalar_to_be_applied_to_all_coordinates
-        xsrc[n] = tr.header.source_coordinate_x/abs(scalcoord[n])
-        ysrc[n] = tr.header.source_coordinate_y/abs(scalcoord[n])
-        sdpth[n] = tr.header.source_depth_below_surface/abs(zscale[n])
-        xrcv[n] = tr.header.group_coordinate_x/abs(scalcoord[n])
-        yrcv[n] = tr.header.group_coordinate_y/abs(scalcoord[n])
+        xsrc[n] = apply_scalar_single(tr.header.source_coordinate_x, scalcoord[n])
+        ysrc[n] = apply_scalar_single(tr.header.source_coordinate_y, scalcoord[n])
+        sdpth[n] = apply_scalar_single(tr.header.source_depth_below_surface, zscale[n])
+        xrcv[n] = apply_scalar_single(tr.header.group_coordinate_x, scalcoord[n])
+        yrcv[n] = apply_scalar_single(tr.header.group_coordinate_y, scalcoord[n])
         auxtime_ms[n]  = tr.header.lag_time_A          #trunc. to nearest ms
         ttime_ms[n]  = tr.header.lag_time_B            # trunc.to nearest ms
         ttime[n]  = tr.header.shotpoint_number/100     # divide if used

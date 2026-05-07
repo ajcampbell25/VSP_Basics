@@ -555,9 +555,10 @@ def VSP_decon(vspup,vspdown,TTobs_single,stab,samprate,Tmax, Tmin, zrcv_select, 
             U=np.fft.fft(u)
             D=np.fft.fft(d)
             A=np.max(np.absolute(D), axis = 0)
-            Ud=U / (D +(stab*A))
+            # Water-level stabilization
+            Ud = U * np.conjugate(D) / (np.absolute(D)**2 + stab * A**2)
 
-            ud=ifft(Ud)
+            ud=np.real(ifft(Ud))
             vspupd[:,k]=ud
 
 ######## apply a BPF to deconvolved upgoing #########    
@@ -774,6 +775,19 @@ def predict_decon(up_flat,down_flat,theaders_all,**kwargs):
         diff_deconpr=trdsign[0:decon_dwnpr.shape[0],k]-decon_dwnpr
         
         decon_dwn_all[:,k] = decon_dwnpr 
+
+        # Apply filter to upgoing wave 
+        trinpr_up = np.convolve(trin_up[:,k], prfilt, mode='full')
+        trinpr_up = trinpr_up[trim:len(trinpr_up)-trim]
+
+        # Delay and subtract predictable from input upgoing
+        x_up = trin_up[nlag+alignsamp:len(trdsign), k]
+        y_up = trinpr_up[0:len(trdsign)-nlag-alignsamp]
+        PE_up = x_up - y_up
+
+        # Insert the PE into the original trace
+        decon_uppr = np.concatenate((trin_up[0:nlag+alignsamp,k], PE_up[0:len(PE_up)]))
+        decon_up_all[:,k] = decon_uppr
     
     ########## Apply a post-decon band-pass filter ####################
     decon_dwn_filt=np.zeros(shape)    
